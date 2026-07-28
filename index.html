@@ -224,6 +224,15 @@ const CONFIG = {
 };
 
 const KEY = "choisclass:v1";
+const SESSION_KEY = "choisclass:session";
+
+/* ─────────────────────────────────────────────────────────────
+   ⚠ 선생님 비밀번호를 잊었을 때만 쓰세요.
+   아래를 true 로 바꿔 저장하고 사이트를 한 번 연 뒤, 다시 false 로 되돌리세요.
+   학급 데이터는 지워지지 않고 «선생님 계정 만들기» 화면만 다시 나옵니다.
+   ───────────────────────────────────────────────────────────── */
+const RESET_TEACHER_ACCOUNT = false;
+
 const DAYS = ["월", "화", "수", "목", "금"];
 const SB = CONFIG.supabaseUrl && CONFIG.supabaseKey ? CONFIG : null;
 const ROW = CONFIG.rowId || "main";
@@ -280,12 +289,14 @@ const store = {
 
 /* ── 기본 데이터 ──────────────────────────────────────── */
 const DEFAULT_DATA = {
-  version: 2,
+  version: 3,
   className: "우리 반",
   currency: "포인트",
   interestRate: 3.5,
   pin: "",
   storeMode: "instant",
+  auth: { teacherId: "", teacherPw: "" },
+  perms: { store: true, stocks: true, bank: true, quests: true },
   students: [],
   items: [],
   quests: [],
@@ -319,6 +330,11 @@ function migrate(raw) {
   const d = Object.assign({}, DEFAULT_DATA, raw || {});
   d.timetable = Object.assign({}, DEFAULT_DATA.timetable, d.timetable || {});
   d.market = Object.assign({ open: true, round: 0 }, d.market || {});
+  d.auth = Object.assign({ teacherId: "", teacherPw: "" }, d.auth || {});
+  d.auth.teacherId = String(d.auth.teacherId || "").trim();
+  d.auth.teacherPw = String(d.auth.teacherPw || "");
+  d.perms = Object.assign({ store: true, stocks: true, bank: true, quests: true }, d.perms || {});
+  ["store", "stocks", "bank", "quests"].forEach((k) => { d.perms[k] = d.perms[k] !== false; });
 
   /* 주식 종목 정리 */
   d.stocks = (Array.isArray(d.stocks) ? d.stocks : []).map((s) => {
@@ -350,6 +366,9 @@ function migrate(raw) {
     });
     base.holdings = holdings;
     base.savings = Math.max(0, Number(base.savings) || 0);
+    base.loginId = String(base.loginId || "").trim();
+    base.loginPw = String(base.loginPw || "");
+    base.active = base.active !== false;
     return base;
   });
 
@@ -377,19 +396,56 @@ function escapeHtml(s) {
 const S = {
   data: null,
   ready: false,
-  mode: "teacher",        // "teacher" | "student"
+  session: null,           // { role:"teacher" } | { role:"student", studentId }
+  preview: null,           // 교사가 학생 화면을 미리 볼 때: "pick" 또는 학생 id
+  loginError: "",
   page: "home",            // 교사 화면 현재 페이지
   ecoOpen: true,
   sel: [],                 // 학급 홈에서 선택된 학생 id들
   amount: 10000,
   reason: "",
   toast: "",
-  modal: null,             // { t: "...", ... }
-  meId: null,              // 학생 모드에서 선택된 학생
+  modal: null,
   studentPage: "wallet",
+  showPw: false,           // 계정 화면에서 비밀번호 보이기
   activityFilter: { who: "all", kind: "all", q: "" },
   questFilter: "all",
 };
+
+/* ── 로그인 세션: 탭을 닫으면 사라짐 (교실 공용 기기 대비) ── */
+function loadSession() {
+  try { const r = window.sessionStorage.getItem(SESSION_KEY); return r ? JSON.parse(r) : null; }
+  catch (e) { return null; }
+}
+function storeSession(s) {
+  try {
+    if (s) window.sessionStorage.setItem(SESSION_KEY, JSON.stringify(s));
+    else window.sessionStorage.removeItem(SESSION_KEY);
+  } catch (e) { /* 저장 못 해도 이번 접속 동안은 동작 */ }
+}
+/* 세션이 아직 유효한지 확인 (계정이 지워졌거나 잠겼을 수 있음) */
+function sessionValid(sess, d) {
+  if (!sess || !d) return false;
+  if (sess.role === "teacher") return !!d.auth.teacherId;
+  if (sess.role === "student") {
+    const st = d.students.find((x) => x.id === sess.studentId);
+    return !!(st && st.active && st.loginId);
+  }
+  return false;
+}
+function logout() {
+  S.session = null; S.preview = null; S.loginError = ""; S.loginIdTyped = "";
+  S.page = "home"; S.sel = []; S.studentPage = "wallet";
+  storeSession(null);
+  render();
+}
+/* 현재 학생 모드에서 보고 있는 학생 id */
+function currentStudentId() {
+  if (S.session && S.session.role === "student") return S.session.studentId;
+  if (S.preview && S.preview !== "pick") return S.preview;
+  return null;
+}
+function isTeacher() { return !!(S.session && S.session.role === "teacher"); }
 let saveTimer = null;
 let myStamp = 0;
 let firstLoad = true;
@@ -657,37 +713,83 @@ function openResetModal() {
   root.addEventListener("click", (e) => {
     if (e.target.id === "reset-cancel") closeModal();
     if (e.target.id === "reset-go") {
-      S.data = migrate(null); S.sel = []; scheduleSave(); closeModal(); render(); say("초기화했어요.");
+      const keepAuth = S.data.auth;
+      S.data = migrate(null);
+      S.data.auth = keepAuth;              // 선생님 계정은 남겨 둡니다
+      S.sel = []; S.preview = null;
+      scheduleSave(); closeModal(); render(); say("초기화했어요. 선생님 계정은 그대로예요.");
     }
   });
 }
 
-/* ══════════ 선생님 화면 잠금 해제(PIN) 모달 ══════════ */
-function openUnlockModal(pin, onOk) {
-  const need = (pin || "").length === 4;
-  let v = "";
-  const body =
-    (need
-      ? '<p style="font-size:14.5px;">선생님 번호 네 자리를 입력해 주세요.</p>' +
-        '<input class="bs-in bs-num mt-3" id="unlock-v" style="max-width:170px;font-size:22px;letter-spacing:.35em;" inputmode="numeric" maxlength="4" value="" autofocus>'
-      : '<p style="font-size:14.5px;line-height:1.75;">선생님 화면으로 돌아갈까요? 설정에서 번호 네 자리를 정해두면 학생이 마음대로 나올 수 없어요.</p>') +
-    '<div class="flex gap-2 justify-end mt-5">' +
-      '<button type="button" class="bs-btn bs-btn-2" id="unlock-cancel">취소</button>' +
-      '<button type="button" class="bs-btn" id="unlock-ok" ' + (need ? "disabled" : "") + '>돌아가기</button>' +
-    '</div>';
-  const root = showModal("선생님 화면으로", body, {});
-  if (need) {
-    $("#unlock-v", root).addEventListener("input", (e) => {
-      v = e.target.value.replace(/\D/g, "").slice(0, 4);
-      e.target.value = v;
-      $("#unlock-ok", root).disabled = v !== pin;
-    });
-    $("#unlock-v", root).focus();
+/* ══════════════════════════════════════════════════════════
+   계정 · 로그인
+   ══════════════════════════════════════════════════════════ */
+function authShell(title, sub, inner) {
+  return '<div class="bs" style="display:grid;place-items:center;padding:24px 16px;">' +
+    '<div style="width:100%;max-width:390px;">' +
+      '<div class="text-center" style="margin-bottom:22px;">' +
+        '<div class="bs-mark" style="font-size:26px;">Choi<span>\'s</span></div>' +
+        '<div style="font-size:13.5px;color:var(--dim);margin-top:4px;">학급 운영 도구</div>' +
+      '</div>' +
+      '<div class="bs-card bs-card-pad">' +
+        '<h1 style="font-size:19px;font-weight:800;letter-spacing:-.02em;">' + escapeHtml(title) + '</h1>' +
+        (sub ? '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;margin-top:6px;">' + sub + '</p>' : '') +
+        inner +
+      '</div>' +
+    '</div></div>';
+}
+
+/* 첫 실행: 선생님 계정 만들기 */
+function setupScreenHtml() {
+  return authShell("선생님 계정 만들기",
+    "이 기기에서 처음 여셨네요. 선생님이 쓸 아이디와 비밀번호를 정해 주세요. 학생 계정은 로그인한 뒤에 만들 수 있어요.",
+    '<label class="bs-lab" style="margin-top:18px;">선생님 아이디</label>' +
+    '<input class="bs-in" id="su-id" placeholder="teacher" autocomplete="off">' +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
+    '<input class="bs-in" id="su-pw" type="password" placeholder="4자 이상" autocomplete="new-password">' +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호 확인</label>' +
+    '<input class="bs-in" id="su-pw2" type="password" autocomplete="new-password">' +
+    '<div id="su-err" style="font-size:13px;color:var(--red);margin-top:10px;min-height:18px;"></div>' +
+    '<button type="button" class="bs-btn" id="su-go" style="width:100%;margin-top:6px;">계정 만들고 시작하기</button>' +
+    '<p style="font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:14px;">' +
+      '비밀번호를 잊으면 되돌릴 방법이 파일 수정뿐이에요. 설정에서 백업을 꼭 내려받아 두세요.</p>');
+}
+
+/* 로그인 화면 */
+function loginScreenHtml() {
+  return authShell("로그인", "선생님과 학생 모두 여기서 들어와요.",
+    '<label class="bs-lab" style="margin-top:18px;">아이디</label>' +
+    '<input class="bs-in" id="lg-id" autocomplete="username" value="' + escapeHtml(S.loginIdTyped || "") + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
+    '<input class="bs-in" id="lg-pw" type="password" autocomplete="current-password">' +
+    '<div id="lg-err" style="font-size:13px;color:var(--red);margin-top:10px;min-height:18px;">' + escapeHtml(S.loginError) + '</div>' +
+    '<button type="button" class="bs-btn" id="lg-go" style="width:100%;margin-top:6px;">로그인</button>');
+}
+
+/* 로그인 시도 */
+function tryLogin(id, pw) {
+  const d = S.data;
+  id = String(id || "").trim();
+  pw = String(pw || "");
+  S.loginIdTyped = id;   // 실패해서 다시 그려도 아이디는 남겨 둠 (비번만 다시 입력하면 되게)
+  if (!id || !pw) { S.loginError = "아이디와 비밀번호를 모두 입력해 주세요."; render(); return; }
+
+  if (d.auth.teacherId && id.toLowerCase() === d.auth.teacherId.toLowerCase()) {
+    if (pw === d.auth.teacherPw) {
+      S.session = { role: "teacher" }; S.loginError = ""; storeSession(S.session);
+      S.page = "home"; render(); say("선생님으로 로그인했어요.");
+    } else { S.loginError = "비밀번호가 맞지 않아요."; render(); }
+    return;
   }
-  root.addEventListener("click", (e) => {
-    if (e.target.id === "unlock-cancel") closeModal();
-    if (e.target.id === "unlock-ok" && !e.target.disabled) { closeModal(); onOk(); }
-  });
+  const st = d.students.find((s) => s.loginId && s.loginId.toLowerCase() === id.toLowerCase());
+  if (!st) { S.loginError = "그런 아이디가 없어요. 선생님께 확인해 주세요."; render(); return; }
+  if (!st.active) { S.loginError = "지금은 사용할 수 없는 계정이에요. 선생님께 말씀드리세요."; render(); return; }
+  if (st.loginPw !== pw) { S.loginError = "비밀번호가 맞지 않아요."; render(); return; }
+
+  S.session = { role: "student", studentId: st.id };
+  S.loginError = ""; S.studentPage = "wallet"; storeSession(S.session);
+  render(); say(st.name + "님, 반가워요.");
 }
 
 /* ══════════ 학생 추가 모달 ══════════ */
@@ -1294,9 +1396,60 @@ function openDividendModal() {
   });
 }
 
+/* 선생님 계정 변경 모달 */
+function openTeacherAccountModal() {
+  const d = S.data;
+  let id = d.auth.teacherId;
+  let cur = "", pw = "", pw2 = "";
+  const body =
+    '<label class="bs-lab">아이디</label>' +
+    '<input class="bs-in" id="ta-id" autocomplete="off" value="' + escapeHtml(id) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">지금 비밀번호</label>' +
+    '<input class="bs-in" id="ta-cur" type="password" autocomplete="off">' +
+    '<label class="bs-lab" style="margin-top:16px;">새 비밀번호 <span style="color:var(--mute);">(그대로 두려면 비워 두세요)</span></label>' +
+    '<input class="bs-in" id="ta-pw" type="password" autocomplete="new-password">' +
+    '<label class="bs-lab" style="margin-top:14px;">새 비밀번호 확인</label>' +
+    '<input class="bs-in" id="ta-pw2" type="password" autocomplete="new-password">' +
+    '<div id="ta-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;"></div>' +
+    '<div class="flex gap-2 justify-end mt-4">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="ta-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="ta-save">저장</button>' +
+    '</div>';
+  const root = showModal("선생님 계정", body, {});
+  const err = (m) => { $("#ta-err", root).textContent = m || ""; };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "ta-id") id = e.target.value;
+    if (e.target.id === "ta-cur") cur = e.target.value;
+    if (e.target.id === "ta-pw") pw = e.target.value;
+    if (e.target.id === "ta-pw2") pw2 = e.target.value;
+    err("");
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "ta-cancel") { closeModal(); return; }
+    if (t.id === "ta-save") {
+      const cleanId = String(id || "").trim();
+      if (!cleanId) { err("아이디를 적어 주세요."); return; }
+      if (/\s/.test(cleanId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
+      if (cur !== S.data.auth.teacherPw) { err("지금 비밀번호가 맞지 않아요."); return; }
+      if (S.data.students.some((s) => s.loginId && s.loginId.toLowerCase() === cleanId.toLowerCase())) {
+        err("학생이 쓰고 있는 아이디예요."); return;
+      }
+      if (pw || pw2) {
+        if (pw.length < 4) { err("새 비밀번호는 4자 이상으로 해 주세요."); return; }
+        if (pw !== pw2) { err("새 비밀번호가 서로 달라요."); return; }
+      }
+      patch((dd) => Object.assign({}, dd, {
+        auth: { teacherId: cleanId, teacherPw: pw ? pw : dd.auth.teacherPw },
+      }));
+      closeModal(); say("선생님 계정을 바꿨어요.");
+    }
+  });
+}
+
 /* ══════════ 학생 매수/매도 모달 ══════════ */
 function openTradeModal(stock, side) {
-  const me = S.data.students.find((s) => s.id === S.meId);
+  const me = S.data.students.find((s) => s.id === currentStudentId());
   if (!me) return;
   const buying = side === "buy";
   const have = sharesOf(me, stock.id);
@@ -1799,6 +1952,166 @@ function renderStocksPage() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   교사 화면 — 학생 계정
+   ══════════════════════════════════════════════════════════ */
+function loginIdTaken(id, exceptStudentId) {
+  const d = S.data;
+  const low = String(id || "").trim().toLowerCase();
+  if (!low) return false;
+  if (d.auth.teacherId && d.auth.teacherId.toLowerCase() === low) return true;
+  return d.students.some((s) => s.id !== exceptStudentId && s.loginId && s.loginId.toLowerCase() === low);
+}
+function randomPw() { return String(Math.floor(1000 + Math.random() * 9000)); }
+
+function renderAccountsPage() {
+  const d = S.data;
+  const students = d.students;
+  const withId = students.filter((s) => s.loginId).length;
+
+  let html = PageHead("학생 계정", "학생은 여기서 만든 아이디로만 들어올 수 있고, 자기 화면만 보게 돼요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="ac-export" ' + (withId ? '' : 'disabled') + '>계정 내려받기</button>' +
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="ac-newpw" ' + (withId ? '' : 'disabled') + '>비밀번호 새로 만들기</button>' +
+    '<button type="button" class="bs-btn bs-btn-sm" id="ac-gen" ' + (students.length ? '' : 'disabled') + '>계정 자동 만들기</button>');
+
+  if (!students.length) return html + Empty("학급 홈에서 명단을 먼저 만들어 주세요.");
+
+  html += '<div class="bs-card bs-card-pad mb-4 flex items-center justify-between gap-3 flex-wrap">' +
+    '<span style="font-size:13.5px;color:var(--dim);">' +
+      '계정이 있는 학생 <b class="bs-num" style="color:var(--ink);">' + withId + '</b> / ' + students.length + '명' +
+    '</span>' +
+    '<button type="button" class="bs-chip" id="ac-toggle-pw" data-on="' + S.showPw + '">' +
+      (S.showPw ? "비밀번호 가리기" : "비밀번호 보기") + '</button>' +
+  '</div>';
+
+  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    '<thead><tr><th style="width:170px;">학생</th><th style="width:150px;">아이디</th>' +
+    '<th style="width:130px;">비밀번호</th><th style="width:120px;">로그인</th><th style="width:110px;"></th></tr></thead><tbody>';
+  students.forEach((s) => {
+    const pwCell = !s.loginPw ? '<span style="color:var(--mute);font-size:13px;">—</span>'
+      : S.showPw ? '<span class="bs-num">' + escapeHtml(s.loginPw) + '</span>'
+      : '<span class="bs-num" style="letter-spacing:.2em;">••••</span>';
+    html += '<tr>' +
+      '<td><span class="flex items-center gap-2">' + Avatar(s.name, 28) +
+        '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
+      '<td>' + (s.loginId ? '<span class="bs-num">' + escapeHtml(s.loginId) + '</span>'
+        : '<span style="color:var(--mute);font-size:13px;">없음</span>') + '</td>' +
+      '<td>' + pwCell + '</td>' +
+      '<td>' + (!s.loginId ? '<span class="bs-badge bs-tag-flat">계정 없음</span>'
+        : s.active ? '<span class="bs-badge bs-b-green">허용</span>'
+        : '<span class="bs-badge bs-b-red">잠김</span>') + '</td>' +
+      '<td class="bs-r"><button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-ac-edit="' + s.id + '">수정</button></td>' +
+    '</tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  html += '<p style="font-size:12.5px;color:var(--dim);line-height:1.8;margin-top:14px;">' +
+    '※ 이 도구는 브라우저 안에서만 도는 프로그램이라, 로그인은 «다른 학생 화면에 못 들어가게» 막아 주는 정도예요. ' +
+    '컴퓨터를 잘 다루는 학생이 개발자 도구를 열면 계정을 들여다볼 수 있으니, 성적처럼 민감한 내용은 담지 마세요.</p>';
+  return html;
+}
+
+/* 학생 계정 수정 모달 */
+function openAccountModal(student) {
+  let id = student.loginId;
+  let pw = student.loginPw;
+  let active = student.active;
+
+  const body =
+    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + Avatar(student.name, 34) +
+      '<div><div style="font-weight:700;">' + student.no + '. ' + escapeHtml(student.name) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--dim);">이 학생이 쓸 계정이에요</div></div></div>' +
+    '<label class="bs-lab">아이디</label>' +
+    '<input class="bs-in" id="ac-id" placeholder="s01" autocomplete="off" value="' + escapeHtml(id) + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
+    '<div class="flex gap-2">' +
+      '<input class="bs-in bs-num" id="ac-pw" autocomplete="off" value="' + escapeHtml(pw) + '">' +
+      '<button type="button" class="bs-chip" id="ac-rand" style="flex-shrink:0;">새로 만들기</button>' +
+    '</div>' +
+    '<label class="bs-lab" style="margin-top:16px;">로그인 허용</label>' +
+    '<div class="flex gap-2">' +
+      '<button type="button" class="bs-chip" data-ac-on="1" data-on="' + active + '">허용</button>' +
+      '<button type="button" class="bs-chip" data-ac-on="0" data-on="' + (!active) + '">잠금</button>' +
+    '</div>' +
+    '<div id="ac-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;"></div>' +
+    '<div class="flex justify-between mt-4 gap-2">' +
+      '<button type="button" class="bs-btn bs-btn-d" id="ac-clear" ' + (student.loginId ? '' : 'disabled') + '>계정 지우기</button>' +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="ac-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="ac-save">저장</button>' +
+      '</div>' +
+    '</div>';
+
+  const root = showModal("계정 수정", body, {});
+  const err = (m) => { $("#ac-err", root).textContent = m || ""; };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "ac-id") { id = e.target.value; err(""); }
+    if (e.target.id === "ac-pw") { pw = e.target.value; err(""); }
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    const on = t.getAttribute && t.getAttribute("data-ac-on");
+    if (on !== null && on !== undefined) {
+      active = on === "1";
+      $$("[data-ac-on]", root).forEach((b) => b.setAttribute("data-on", (b.getAttribute("data-ac-on") === "1") === active));
+      return;
+    }
+    if (t.id === "ac-rand") { pw = randomPw(); $("#ac-pw", root).value = pw; err(""); return; }
+    if (t.id === "ac-cancel") { closeModal(); return; }
+    if (t.id === "ac-clear") {
+      patch((d) => Object.assign({}, d, {
+        students: d.students.map((x) => (x.id === student.id ? Object.assign({}, x, { loginId: "", loginPw: "", active: true }) : x)),
+      }));
+      closeModal(); say("계정을 지웠어요.");
+      return;
+    }
+    if (t.id === "ac-save") {
+      const cleanId = String(id || "").trim();
+      if (cleanId && /\s/.test(cleanId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
+      if (cleanId && loginIdTaken(cleanId, student.id)) { err("이미 쓰고 있는 아이디예요."); return; }
+      if (cleanId && !pw) { err("비밀번호도 정해 주세요."); return; }
+      if (!cleanId && pw) { err("아이디도 정해 주세요."); return; }
+      patch((d) => Object.assign({}, d, {
+        students: d.students.map((x) => (x.id === student.id
+          ? Object.assign({}, x, { loginId: cleanId, loginPw: pw, active }) : x)),
+      }));
+      closeModal(); say("저장했어요.");
+    }
+  });
+}
+
+/* 계정 자동 생성 */
+function generateAccounts() {
+  let made = 0;
+  patch((d) => ({
+    ...d,
+    students: d.students.map((s) => {
+      if (s.loginId) return s;                       // 이미 있는 계정은 건드리지 않음
+      let base = "s" + String(s.no).padStart(2, "0");
+      let candidate = base, n = 1;
+      while (loginIdTaken(candidate, s.id)) { candidate = base + "-" + (++n); }
+      made++;
+      return Object.assign({}, s, { loginId: candidate, loginPw: randomPw(), active: true });
+    }),
+  }));
+  say(made ? made + "명의 계정을 만들었어요." : "이미 모두 계정이 있어요.");
+}
+/* 비밀번호만 전부 새로 */
+function regenPasswords() {
+  patch((d) => Object.assign({}, d, {
+    students: d.students.map((s) => (s.loginId ? Object.assign({}, s, { loginPw: randomPw() }) : s)),
+  }));
+  say("비밀번호를 새로 만들었어요. 학생들에게 다시 알려 주세요.");
+}
+/* 계정 목록 CSV */
+function exportAccounts() {
+  const d = S.data;
+  const head = "번호,이름,아이디,비밀번호,로그인\n";
+  const body = d.students.filter((s) => s.loginId).map((s) =>
+    [s.no, s.name, s.loginId, s.loginPw, s.active ? "허용" : "잠금"].map((v) => '"' + v + '"').join(",")).join("\n");
+  download(d.className + "-학생계정.csv", "\uFEFF" + head + body, "text/csv;charset=utf-8");
+}
+
+/* ══════════════════════════════════════════════════════════
    교사 화면 — 설정
    ══════════════════════════════════════════════════════════ */
 function renderSettingsPage() {
@@ -1822,10 +2135,20 @@ function renderSettingsPage() {
     '</div></div>';
 
   html += '<div class="bs-card bs-card-pad">' +
-    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생 모드 잠금</div>' +
-    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">숫자 4자리를 정해두면 학생 모드에서 나올 때 이 번호를 물어봐요.</p>' +
-    '<input class="bs-in bs-num mt-3" id="set-pin" style="max-width:130px;letter-spacing:.3em;" inputmode="numeric" maxlength="4" placeholder="0000" value="' + escapeHtml(d.pin) + '">' +
-  '</div>';
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">선생님 계정</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">' +
+      '지금 아이디 <b class="bs-num" style="color:var(--ink);">' + escapeHtml(d.auth.teacherId) + '</b></p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-teacher-acc">아이디·비밀번호 바꾸기</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생에게 허용할 기능</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">끄면 학생 화면에서 그 메뉴가 사라져요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      [["store", "상점 구매"], ["stocks", "주식 거래"], ["bank", "예금·출금"], ["quests", "퀘스트 신청"]].map((p) =>
+        '<button type="button" class="bs-chip" data-perm="' + p[0] + '" data-on="' + d.perms[p[0]] + '">' + p[1] + '</button>').join("") +
+    '</div></div>';
 
   html += '<div class="bs-card bs-card-pad">' +
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">백업</div>' +
@@ -1852,41 +2175,57 @@ function renderSettingsPage() {
    ══════════════════════════════════════════════════════════ */
 function studentAppHtml() {
   const d = S.data;
-  const me = d.students.find((s) => s.id === S.meId);
+  const previewing = !!S.preview && isTeacher();
+  const meId = currentStudentId();
+  const me = meId ? d.students.find((s) => s.id === meId) : null;
+
+  /* 교사가 미리 볼 학생을 고르는 화면 (학생 본인에게는 절대 나오지 않음) */
   if (!me) {
     let html = '<div class="bs"><div class="mx-auto px-5 py-9" style="max-width:780px;">' +
       '<div class="flex items-start justify-between gap-3 mb-7">' +
         '<div><div style="font-size:13.5px;color:var(--dim);">' + escapeHtml(d.className) + '</div>' +
-        '<h1 style="font-size:24px;font-weight:800;letter-spacing:-.03em;margin-top:4px;">내 이름을 눌러 주세요</h1></div>' +
-        '<button type="button" class="bs-pill" id="stu-exit">선생님</button>' +
+        '<h1 style="font-size:24px;font-weight:800;letter-spacing:-.03em;margin-top:4px;">어느 학생 화면을 볼까요?</h1></div>' +
+        '<button type="button" class="bs-pill" id="preview-exit">미리보기 끝내기</button>' +
       '</div>';
-    if (!d.students.length) {
-      html += Empty("아직 명단이 없어요. 선생님을 불러 주세요.");
-    } else {
-      html += '<div class="grid gap-x-4 gap-y-6" style="grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));">' +
+    html += !d.students.length ? Empty("아직 명단이 없어요.")
+      : '<div class="grid gap-x-4 gap-y-6" style="grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));">' +
         d.students.map((s) => '<button type="button" class="bs-stu" data-pick="' + s.id + '">' + Avatar(s.name) +
           '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div></button>').join("") + '</div>';
-    }
-    html += '</div></div>';
-    return html;
+    return html + '</div></div>';
   }
 
   const jobs = d.jobs, quests = d.quests, items = d.items, requests = d.requests, log = d.log;
+  const perms = d.perms;
   const instant = d.storeMode !== "approval";
   const myJob = jobs.find((j) => j.holders.includes(me.id));
   const myLog = log.filter((e) => e.studentId === me.id).slice(0, 20);
   const waiting = (type, refId) => requests.some((r) => r.studentId === me.id && r.type === type && r.refId === refId && r.status === "대기");
-  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"], ["quest", "퀘스트"], ["store", "상점"], ["stocks", "주식"], ["tt", "시간표"]];
+
+  /* 선생님이 허용한 메뉴만 */
+  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"]]
+    .concat(perms.quests ? [["quest", "퀘스트"]] : [])
+    .concat(perms.store ? [["store", "상점"]] : [])
+    .concat(perms.stocks ? [["stocks", "주식"]] : [])
+    .concat([["tt", "시간표"]]);
+  if (!NAV.some((n) => n[0] === S.studentPage)) S.studentPage = "wallet";
+
   const total = me.balance + (me.savings || 0);
   const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
 
-  let html = '<div class="bs">' +
-    '<div class="bs-top">' +
+  let html = '<div class="bs">';
+  if (previewing) {
+    html += '<div style="background:var(--orange-bg);color:var(--orange);font-size:13.5px;font-weight:600;' +
+      'padding:9px 16px;text-align:center;">선생님 미리보기 중 · 실제 학생에게는 이 띠가 보이지 않아요</div>';
+  }
+  html += '<div class="bs-top">' +
       '<div class="mx-auto px-5 py-3 flex items-center justify-between gap-3" style="max-width:900px;">' +
         '<div class="flex items-center gap-3">' + Avatar(me.name, 36) +
         '<div><div style="font-weight:700;font-size:15px;">' + me.no + '. ' + escapeHtml(me.name) + '</div>' +
         '<div style="font-size:12.5px;color:var(--dim);">' + escapeHtml(d.className) + '</div></div></div>' +
-        '<button type="button" class="bs-pill" id="stu-switch">바꾸기</button>' +
+        (previewing
+          ? '<div class="flex gap-2"><button type="button" class="bs-pill" id="preview-pick">다른 학생</button>' +
+            '<button type="button" class="bs-pill" id="preview-exit">미리보기 끝내기</button></div>'
+          : '<button type="button" class="bs-pill" id="stu-logout">로그아웃</button>') +
       '</div>' +
       '<div class="mx-auto px-5 pb-3 flex gap-2 overflow-x-auto" style="max-width:900px;">' +
         NAV.map((n) => '<button type="button" class="bs-chip" data-stupage="' + n[0] + '" data-on="' + (S.studentPage === n[0]) + '">' + n[1] + '</button>').join("") +
@@ -1906,12 +2245,14 @@ function studentAppHtml() {
         '<span class="bs-num" style="font-weight:700;">' + fmt(me.savings || 0) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(me.savings || 0) + '%)</span></span></div>' +
       '</div>' +
       '<div class="mt-4 pt-4" style="border-top:1px solid var(--line);">' +
-        '<label class="bs-lab">예금하거나 출금할 금액</label>' +
-        '<div class="flex gap-2 flex-wrap">' +
-          '<input class="bs-in bs-num" id="stu-bank-amt" style="max-width:160px;" type="number" min="0" value="" placeholder="0">' +
-          '<button type="button" class="bs-btn" id="stu-bank-in">예금하기</button>' +
-          '<button type="button" class="bs-btn bs-btn-2" id="stu-bank-out">출금하기</button>' +
-        '</div>' +
+        (perms.bank
+          ? '<label class="bs-lab">예금하거나 출금할 금액</label>' +
+            '<div class="flex gap-2 flex-wrap">' +
+              '<input class="bs-in bs-num" id="stu-bank-amt" style="max-width:160px;" type="number" min="0" value="" placeholder="0">' +
+              '<button type="button" class="bs-btn" id="stu-bank-in">예금하기</button>' +
+              '<button type="button" class="bs-btn bs-btn-2" id="stu-bank-out">출금하기</button>' +
+            '</div>'
+          : '<div style="font-size:13.5px;color:var(--dim);">지금은 예금·출금을 선생님이 잠가 두셨어요.</div>') +
       '</div>' +
     '</div>';
     html += '<div class="bs-card bs-card-pad">' +
@@ -2086,6 +2427,7 @@ const NAV = [
   ] },
   { k: "quests", ico: "❏", label: "퀘스트" },
   { k: "tt", ico: "▥", label: "시간표" },
+  { k: "accounts", ico: "◉", label: "학생 계정" },
   { k: "settings", ico: "⚙", label: "설정" },
 ];
 
@@ -2099,6 +2441,7 @@ function pageBody() {
     case "jobs": return renderJobsPage();
     case "quests": return renderQuestsPage();
     case "tt": return timetableHtml(false);
+    case "accounts": return renderAccountsPage();
     case "settings": return renderSettingsPage();
     default: return "";
   }
@@ -2133,7 +2476,8 @@ function teacherAppHtml() {
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
       '<div class="flex items-center gap-2">' +
         '<span class="bs-pill" style="cursor:default;">' + escapeHtml(d.className) + '</span>' +
-        '<button type="button" class="bs-pill" id="go-student">학생 모드</button>' +
+        '<button type="button" class="bs-pill" id="go-preview">학생 화면 미리보기</button>' +
+        '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
       '</div></div></div>' +
     '<div class="bs-shell mx-auto flex gap-7 px-5 py-7" style="max-width:1240px;">' +
       '<aside class="bs-side"><nav class="bs-nav">' + navHtml + '</nav></aside>' +
@@ -2152,7 +2496,18 @@ function render() {
     root.innerHTML = '<div class="bs" style="display:grid;place-items:center;padding:48px;"><p style="color:var(--dim);">불러오는 중…</p></div>';
     return;
   }
-  if (S.mode === "student") { root.innerHTML = studentAppHtml(); return; }
+  /* 1) 선생님 계정이 아직 없으면 계정 만들기 */
+  if (!S.data.auth.teacherId) { root.innerHTML = setupScreenHtml(); return; }
+  /* 2) 로그인하지 않았으면 로그인 화면 */
+  if (!sessionValid(S.session, S.data)) {
+    if (S.session) { S.session = null; storeSession(null); }
+    root.innerHTML = loginScreenHtml();
+    return;
+  }
+  /* 3) 학생으로 로그인했으면 학생 화면만 */
+  if (S.session.role === "student") { root.innerHTML = studentAppHtml(); return; }
+  /* 4) 선생님: 미리보기 중이면 학생 화면, 아니면 교사 화면 */
+  if (S.preview) { root.innerHTML = studentAppHtml(); return; }
   root.innerHTML = teacherAppHtml();
 }
 
@@ -2163,12 +2518,37 @@ function bindGlobalEvents() {
     /* 버튼 안의 아이콘/문구 span을 클릭해도 항상 버튼(또는 상호작용 요소) 자체를 대상으로 삼는다 */
     const t = e.target.closest("button, select, input, label") || e.target;
 
-    /* ── 학생 모드 전환 ── */
-    if (t.id === "go-student") { S.mode = "student"; S.sel = []; S.meId = null; S.studentPage = "wallet"; render(); return; }
-    /* 이름 목록 화면의 «선생님» → 번호 확인 후 교사 화면으로 */
-    if (t.id === "stu-exit") { openUnlockModal(S.data.pin, () => { S.mode = "teacher"; render(); }); return; }
-    /* 학생 화면의 «바꾸기» → 다른 학생으로 (번호 필요 없음) */
-    if (t.id === "stu-switch") { S.meId = null; S.studentPage = "wallet"; render(); return; }
+    /* ── 계정 만들기 / 로그인 ── */
+    if (t.id === "su-go") {
+      const id = ($("#su-id") || {}).value || "";
+      const pw = ($("#su-pw") || {}).value || "";
+      const pw2 = ($("#su-pw2") || {}).value || "";
+      const errEl = $("#su-err");
+      const cleanId = id.trim();
+      if (!cleanId) { errEl.textContent = "아이디를 적어 주세요."; return; }
+      if (/\s/.test(cleanId)) { errEl.textContent = "아이디에는 띄어쓰기를 쓸 수 없어요."; return; }
+      if (pw.length < 4) { errEl.textContent = "비밀번호는 4자 이상으로 해 주세요."; return; }
+      if (pw !== pw2) { errEl.textContent = "비밀번호가 서로 달라요."; return; }
+      S.data = Object.assign({}, S.data, { auth: { teacherId: cleanId, teacherPw: pw } });
+      scheduleSave();
+      S.session = { role: "teacher" }; storeSession(S.session);
+      render(); say("선생님 계정을 만들었어요.");
+      return;
+    }
+    if (t.id === "lg-go") {
+      tryLogin(($("#lg-id") || {}).value, ($("#lg-pw") || {}).value);
+      return;
+    }
+    if (t.id === "teacher-logout" || t.id === "stu-logout") { logout(); return; }
+
+    /* ── 학생 화면 미리보기 (선생님 전용) ── */
+    if (t.id === "go-preview") { if (!isTeacher()) return; S.preview = "pick"; S.sel = []; S.studentPage = "wallet"; render(); return; }
+    if (t.id === "preview-pick") { if (!isTeacher()) return; S.preview = "pick"; render(); return; }
+    if (t.id === "preview-exit") { S.preview = null; render(); return; }
+    if (t.getAttribute("data-pick")) {
+      if (!isTeacher()) return;               // 학생은 이 화면 자체를 볼 수 없음
+      S.preview = t.getAttribute("data-pick"); S.studentPage = "wallet"; render(); return;
+    }
     if (t.getAttribute("data-pick")) { S.meId = t.getAttribute("data-pick"); S.studentPage = "wallet"; render(); return; }
 
     /* ── 학생 모드 내비게이션 ── */
@@ -2178,7 +2558,7 @@ function bindGlobalEvents() {
     if (stuActKind) {
       S.studentActivityKind = stuActKind;
       $$("#stuact-kinds [data-stuact-kind]").forEach((b) => b.setAttribute("data-on", b.getAttribute("data-stuact-kind") === stuActKind));
-      const me = S.data.students.find((s) => s.id === S.meId);
+      const me = S.data.students.find((s) => s.id === currentStudentId());
       $("#stuact-list").innerHTML = studentActivityListHtml(me);
       return;
     }
@@ -2210,7 +2590,7 @@ function bindGlobalEvents() {
     if (t.id === "hp-sel-all") { S.sel = S.data.students.map((s) => s.id); render(); return; }
     if (t.id === "hp-sel-none") { S.sel = []; render(); return; }
     const stuCard = t.closest && t.closest(".bs-stu[data-id]");
-    if (stuCard && S.page === "home" && S.mode === "teacher") {
+    if (stuCard && S.page === "home" && isTeacher() && !S.preview) {
       const id = stuCard.getAttribute("data-id");
       S.sel = S.sel.includes(id) ? S.sel.filter((x) => x !== id) : [...S.sel, id];
       render(); return;
@@ -2285,7 +2665,21 @@ function bindGlobalEvents() {
     if (t.id === "tt-minus") { patch((d) => Object.assign({}, d, { timetable: Object.assign({}, d.timetable, { periods: d.timetable.periods - 1 }) })); return; }
     if (t.id === "tt-plus") { patch((d) => Object.assign({}, d, { timetable: Object.assign({}, d.timetable, { periods: d.timetable.periods + 1 }) })); return; }
 
+    /* ── 학생 계정 ── */
+    if (t.id === "ac-gen") { generateAccounts(); return; }
+    if (t.id === "ac-newpw") { regenPasswords(); return; }
+    if (t.id === "ac-export") { exportAccounts(); return; }
+    if (t.id === "ac-toggle-pw") { S.showPw = !S.showPw; render(); return; }
+    const acEdit = t.getAttribute("data-ac-edit");
+    if (acEdit) { openAccountModal(S.data.students.find((s) => s.id === acEdit)); return; }
+
     /* ── 설정 ── */
+    if (t.id === "set-teacher-acc") { openTeacherAccountModal(); return; }
+    const permKey = t.getAttribute("data-perm");
+    if (permKey) {
+      patch((d) => Object.assign({}, d, { perms: Object.assign({}, d.perms, { [permKey]: !d.perms[permKey] }) }));
+      return;
+    }
     if (t.id === "set-mode-instant") { patch((d) => Object.assign({}, d, { storeMode: "instant" })); return; }
     if (t.id === "set-mode-approval") { patch((d) => Object.assign({}, d, { storeMode: "approval" })); return; }
     if (t.id === "set-backup") { download(S.data.className + "-백업-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(S.data, null, 2)); return; }
@@ -2309,7 +2703,6 @@ function bindGlobalEvents() {
     /* 설정 입력들 (조용히 반영) */
     if (t.id === "set-classname") { patchQuiet((d) => Object.assign({}, d, { className: t.value })); return; }
     if (t.id === "set-currency") { patchQuiet((d) => Object.assign({}, d, { currency: t.value })); return; }
-    if (t.id === "set-pin") { t.value = t.value.replace(/\D/g, "").slice(0, 4); patchQuiet((d) => Object.assign({}, d, { pin: t.value })); return; }
 
     /* 재테크 이자율 (조용히 반영 + 큰 숫자만 즉시 갱신) */
     if (t.id === "fin-rate") {
@@ -2325,8 +2718,7 @@ function bindGlobalEvents() {
 
   root.addEventListener("change", (e) => {
     const t = e.target;
-    if (t.id === "act-who") { S.activityFilter.who = t.value; const el = document.getElementById("act-table"); if (el) el.innerHTML = activityTableHtml(); return; }
-    if (t.id === "set-restore") {
+    if (t.id === "act-who") { S.activityFilter.who = t.value; const el = document.getElementById("act-table"); if (el) el.innerHTML = activityTableHtml(); return; }    if (t.id === "set-restore") {
       const f = t.files && t.files[0];
       if (!f) return;
       const r = new FileReader();
@@ -2334,7 +2726,12 @@ function bindGlobalEvents() {
         try {
           const parsed = JSON.parse(String(r.result));
           if (!parsed || !Array.isArray(parsed.students)) throw new Error("bad file");
-          S.data = migrate(parsed);
+          const keepAuth = S.data.auth;
+          const next = migrate(parsed);
+          /* 옛 백업에는 계정 정보가 없어요. 그럴 땐 지금 쓰는 선생님 계정을 유지합니다 */
+          if (!next.auth.teacherId) next.auth = keepAuth;
+          S.data = next;
+          S.preview = null;
           scheduleSave();
           render();
           say("백업을 복원했어요.");
@@ -2347,14 +2744,22 @@ function bindGlobalEvents() {
       return;
     }
   });
+  /* 로그인·계정 만들기 화면에서 엔터로 넘어가기 */
+  root.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    const id = e.target.id;
+    if (id === "lg-id" || id === "lg-pw") { e.preventDefault(); const b = $("#lg-go"); if (b) b.click(); return; }
+    if (id === "su-id" || id === "su-pw" || id === "su-pw2") { e.preventDefault(); const b = $("#su-go"); if (b) b.click(); return; }
+  });
 }
 
 /* ── 학생 모드 동작 함수들 ── */
 /* 주식 매수/매도 실행 (검증 포함) */
 function doTrade(stockId, side, qty) {
   const d = S.data;
+  if (!d.perms.stocks) { say("선생님이 주식 거래를 잠가 두셨어요."); return; }
   if (!d.market.open) { say("지금은 거래 시간이 아니에요."); return; }
-  const me = d.students.find((s) => s.id === S.meId);
+  const me = d.students.find((s) => s.id === currentStudentId());
   const st = d.stocks.find((x) => x.id === stockId);
   if (!me || !st) { say("종목을 찾을 수 없어요."); return; }
   qty = Math.floor(Number(qty) || 0);
@@ -2397,12 +2802,15 @@ function doTrade(stockId, side, qty) {
 }
 
 function studentAsk(type, refId, label) {
-  patch((d) => Object.assign({}, d, { requests: [{ id: uid(), type, refId, studentId: S.meId, at: now(), status: "대기" }, ...d.requests].slice(0, 500) }));
+  if (type === "퀘스트" && !S.data.perms.quests) { say("선생님이 퀘스트 신청을 잠가 두셨어요."); return; }
+  if (type === "구매" && !S.data.perms.store) { say("선생님이 상점을 잠가 두셨어요."); return; }
+  patch((d) => Object.assign({}, d, { requests: [{ id: uid(), type, refId, studentId: currentStudentId(), at: now(), status: "대기" }, ...d.requests].slice(0, 500) }));
   say(label + " 신청을 보냈어요.");
 }
 function studentBuyOrAsk(itemId) {
   const d = S.data;
-  const me = d.students.find((s) => s.id === S.meId);
+  if (!d.perms.store) { say("선생님이 상점을 잠가 두셨어요."); return; }
+  const me = d.students.find((s) => s.id === currentStudentId());
   const it = d.items.find((i) => i.id === itemId);
   if (!it || !me) return;
   const instant = d.storeMode !== "approval";
@@ -2419,7 +2827,8 @@ function studentBuyOrAsk(itemId) {
 }
 function studentBank(dir, amt) {
   const d = S.data;
-  const me = d.students.find((s) => s.id === S.meId);
+  if (!d.perms.bank) { say("선생님이 예금·출금을 잠가 두셨어요."); return; }
+  const me = d.students.find((s) => s.id === currentStudentId());
   if (!me) return;
   const real = dir === "in" ? Math.min(amt, me.balance) : Math.min(amt, me.savings || 0);
   if (real <= 0) { say("옮길 금액이 없어요."); return; }
@@ -2517,6 +2926,19 @@ async function boot() {
   const loaded = await store.load();
   myStamp = loaded.stamp;
   S.data = migrate(loaded.data);
+
+  /* 비밀번호를 잊었을 때의 탈출구 (파일 위쪽 상수) */
+  if (RESET_TEACHER_ACCOUNT) {
+    S.data = Object.assign({}, S.data, { auth: { teacherId: "", teacherPw: "" } });
+    storeSession(null);
+    scheduleSave();
+  }
+
+  /* 지난 세션 이어받기 (같은 탭에서 새로고침한 경우) */
+  const sess = loadSession();
+  S.session = sessionValid(sess, S.data) ? sess : null;
+  if (!S.session) storeSession(null);
+
   S.ready = true;
   render();
 

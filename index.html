@@ -11,22 +11,27 @@
 /* ══════════════════════════════════════════════════════════
    Choi's — 학급 운영 도구 (순수 HTML/CSS/JavaScript 버전)
    ══════════════════════════════════════════════════════════ */
-html,body,#root{margin:0;padding:0;min-height:100%;}
-body{background:#F7F7F8;}
-
-.bs{
+/* ── 색상·간격 변수는 :root 에 두어야 body 직속으로 붙는 모달/토스트에도 적용됩니다 ── */
+:root{
   --bg:#F7F7F8; --card:#FFFFFF; --line:#EDEDEF; --ink:#191A1C; --dim:#8C8C93; --mute:#B4B4BA;
   --dark:#141416; --soft:#F0F0F2; --coin:#F5C33B;
   --green:#12A05C; --green-bg:#E8F7EE; --red:#DF524A; --red-bg:#FDECEC;
   --blue:#5B72C4; --blue-bg:#EEF0FB; --orange:#E38A3C; --orange-bg:#FFF2E6;
+  --up:#DF524A; --up-bg:#FDECEC; --down:#2F62D8; --down-bg:#EAF0FE;
   --r:16px;
+}
+*{box-sizing:border-box;}
+html,body,#root{margin:0;padding:0;min-height:100%;}
+body{
+  background:var(--bg); color:var(--ink); font-size:15px;
   font-family:Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",system-ui,sans-serif;
-  background:var(--bg); color:var(--ink); min-height:100vh; font-size:15px;
   -webkit-font-smoothing:antialiased;
 }
-.bs *{box-sizing:border-box;}
-.bs button{font-family:inherit;cursor:pointer;}
-.bs :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+button,input,textarea,select{font-family:inherit;}
+button{cursor:pointer;}
+:focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+
+.bs{background:var(--bg); color:var(--ink); min-height:100vh;}
 .bs-num{font-variant-numeric:tabular-nums;}
 
 /* ── 유틸리티 (레이아웃) ─────────────────────────────────── */
@@ -180,6 +185,22 @@ body{background:#F7F7F8;}
   font-family:inherit;color:var(--ink);}
 .bs-tt input:focus{outline:none;background:#F6F6F8;}
 
+/* 주식 */
+.bs-up{color:var(--up);} .bs-down{color:var(--down);} .bs-flat{color:var(--dim);}
+.bs-tag-up{background:var(--up-bg);color:var(--up);}
+.bs-tag-down{background:var(--down-bg);color:var(--down);}
+.bs-tag-flat{background:var(--soft);color:var(--dim);}
+.bs-spark{display:block;}
+.bs-tick-code{font-size:12px;color:var(--dim);font-weight:500;letter-spacing:.04em;}
+.bs-price{font-size:22px;font-weight:800;letter-spacing:-.02em;}
+.bs-qty{display:flex;align-items:center;gap:8px;}
+.bs-qty button{width:38px;height:38px;border-radius:12px;border:1px solid var(--line);background:var(--card);
+  font-size:18px;font-weight:700;color:var(--ink);flex-shrink:0;}
+.bs-qty button:hover{background:var(--soft);}
+.bs-qty input{text-align:center;}
+.bs-mkt{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;}
+.bs-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
+
 @media (prefers-reduced-motion:reduce){.bs *{animation-duration:.001s!important;transition:none!important;}}
 </style>
 </head>
@@ -259,7 +280,7 @@ const store = {
 
 /* ── 기본 데이터 ──────────────────────────────────────── */
 const DEFAULT_DATA = {
-  version: 1,
+  version: 2,
   className: "우리 반",
   currency: "포인트",
   interestRate: 3.5,
@@ -270,6 +291,8 @@ const DEFAULT_DATA = {
   quests: [],
   jobs: [],
   requests: [],
+  stocks: [],
+  market: { open: true, round: 0 },
   timetable: { periods: 6, cells: {} },
   log: [],
 };
@@ -281,7 +304,7 @@ const when = (t) =>
   new Date(t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
 
 const REASONS = ["발표", "도움", "숙제", "정리", "성실", "칭찬", "지각", "규칙 위반", "미제출"];
-const KINDS = ["지급", "차감", "구매", "퀘스트", "급여", "이자", "입금", "출금"];
+const KINDS = ["지급", "차감", "구매", "퀘스트", "급여", "이자", "입금", "출금", "주식", "배당"];
 const CATS = ["간식", "쿠폰", "특권", "학용품", "기타"];
 
 const AV = ["#F2A15C", "#5B8DEF", "#4FB980", "#B884E0", "#E4739B", "#E0B341", "#5FBCC8", "#A08A6B", "#7C86D6", "#D4785C"];
@@ -295,7 +318,41 @@ function avColor(seed) {
 function migrate(raw) {
   const d = Object.assign({}, DEFAULT_DATA, raw || {});
   d.timetable = Object.assign({}, DEFAULT_DATA.timetable, d.timetable || {});
-  d.students = (d.students || []).map((s) => Object.assign({ savings: 0, memo: "" }, s, { balance: Number(s.balance) || 0 }));
+  d.market = Object.assign({ open: true, round: 0 }, d.market || {});
+
+  /* 주식 종목 정리 */
+  d.stocks = (Array.isArray(d.stocks) ? d.stocks : []).map((s) => {
+    const price = Math.max(0, Math.round(Number(s.price) || 0));
+    const prev = s.prev == null ? price : Math.max(0, Math.round(Number(s.prev) || 0));
+    let history = Array.isArray(s.history) ? s.history.map((v) => Math.max(0, Math.round(Number(v) || 0))) : [];
+    if (!history.length) history = [price];
+    return {
+      id: s.id || uid(),
+      name: String(s.name || "이름 없는 종목"),
+      code: String(s.code || ""),
+      note: String(s.note || ""),
+      price, prev,
+      history: history.slice(-40),
+    };
+  });
+  const stockIds = d.stocks.map((s) => s.id);
+
+  /* 학생 정리 (+ 보유 주식) */
+  d.students = (d.students || []).map((s) => {
+    const base = Object.assign({ savings: 0, memo: "" }, s, { balance: Number(s.balance) || 0 });
+    const src = base.holdings && typeof base.holdings === "object" ? base.holdings : {};
+    const holdings = {};
+    Object.keys(src).forEach((k) => {
+      if (!stockIds.includes(k)) return;           // 사라진 종목은 버림
+      const shares = Math.max(0, Math.floor(Number(src[k] && src[k].shares) || 0));
+      if (shares <= 0) return;
+      holdings[k] = { shares, avgCost: Math.max(0, Number(src[k].avgCost) || 0) };
+    });
+    base.holdings = holdings;
+    base.savings = Math.max(0, Number(base.savings) || 0);
+    return base;
+  });
+
   d.items = (d.items || []).map((i) => Object.assign({ category: "기타" }, i));
   d.quests = (d.quests || []).map((q) => Object.assign({ open: true }, q, { done: q.done || [] }));
   ["jobs", "requests", "log"].forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
@@ -425,6 +482,60 @@ function Empty(line, actionHtml) {
   return '<div class="bs-card" style="padding:56px 24px;text-align:center;">' +
     '<p style="font-size:15px;color:var(--dim);">' + escapeHtml(line) + '</p>' +
     (actionHtml ? '<div class="mt-4 flex justify-center gap-2 flex-wrap">' + actionHtml + '</div>' : '') + '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   주식 계산 도우미
+   ══════════════════════════════════════════════════════════ */
+function stockChange(st) {
+  const diff = st.price - st.prev;
+  const pct = st.prev > 0 ? (diff / st.prev) * 100 : 0;
+  return { diff, pct, dir: diff > 0 ? "up" : diff < 0 ? "down" : "flat" };
+}
+function changeBadge(st) {
+  const c = stockChange(st);
+  const arrow = c.dir === "up" ? "▲" : c.dir === "down" ? "▼" : "―";
+  const cls = c.dir === "up" ? "bs-tag-up" : c.dir === "down" ? "bs-tag-down" : "bs-tag-flat";
+  const sign = c.diff > 0 ? "+" : "";
+  return '<span class="bs-badge ' + cls + ' bs-num">' + arrow + " " + sign + fmt(c.diff) + " (" + sign + c.pct.toFixed(1) + "%)</span>";
+}
+function sharesOf(student, stockId) {
+  const h = student.holdings && student.holdings[stockId];
+  return h ? h.shares : 0;
+}
+function totalSharesOf(stockId) {
+  return S.data.students.reduce((a, s) => a + sharesOf(s, stockId), 0);
+}
+function holdersOf(stockId) {
+  return S.data.students.filter((s) => sharesOf(s, stockId) > 0);
+}
+/* 학생 한 명의 주식 평가금액 / 투자원금 / 손익 */
+function stockAssetOf(student) {
+  let val = 0, cost = 0;
+  const hs = student.holdings || {};
+  Object.keys(hs).forEach((id) => {
+    const st = S.data.stocks.find((x) => x.id === id);
+    if (!st) return;
+    val += st.price * hs[id].shares;
+    cost += hs[id].avgCost * hs[id].shares;
+  });
+  return { val: Math.round(val), cost: Math.round(cost), gain: Math.round(val - cost) };
+}
+/* 꺾은선 미니 차트 */
+function sparkline(history, w, h) {
+  const data = (history || []).slice(-20);
+  if (data.length < 2) return '<div style="width:' + w + 'px;height:' + h + 'px;"></div>';
+  const min = Math.min.apply(null, data), max = Math.max.apply(null, data);
+  const range = (max - min) || 1;
+  const pts = data.map((v, i) => {
+    const x = (i / (data.length - 1)) * (w - 2) + 1;
+    const y = h - 1 - ((v - min) / range) * (h - 2);
+    return x.toFixed(1) + "," + y.toFixed(1);
+  }).join(" ");
+  const rising = data[data.length - 1] >= data[0];
+  const color = rising ? "var(--up)" : "var(--down)";
+  return '<svg class="bs-spark" width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '">' +
+    '<polyline points="' + pts + '" fill="none" stroke="' + color + '" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>';
 }
 
 /* ══════════════════════════════════════════════════════════
@@ -897,6 +1008,361 @@ function openBankModal(dir) {
   $("#bk-amt", root).addEventListener("input", (e) => { amt = Math.max(0, Number(e.target.value)); refreshGo(); });
 }
 
+/* ══════════ 종목 만들기 / 수정 모달 ══════════ */
+function openStockModal(stock) {
+  let name = stock ? stock.name : "";
+  let code = stock ? stock.code : "";
+  let price = stock ? stock.price : 10000;
+  let note = stock ? stock.note : "";
+  const shares = stock ? totalSharesOf(stock.id) : 0;
+
+  const body =
+    '<label class="bs-lab">종목 이름</label>' +
+    '<input class="bs-in" id="sk-name" placeholder="우리반 문구점" value="' + escapeHtml(name) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">종목 코드 (선택)</label>' +
+    '<input class="bs-in" id="sk-code" placeholder="MOON" value="' + escapeHtml(code) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">' + (stock ? "현재 주가" : "시작 주가") + '</label>' +
+    '<input class="bs-in bs-num" id="sk-price" type="number" min="1" step="100" value="' + price + '">' +
+    '<p style="font-size:12.5px;color:var(--dim);margin-top:6px;">1 이상이어야 해요.' +
+      (stock ? ' 여기서 바꾸면 등락 기록 없이 값만 고쳐져요. 수업 중 시세 변화는 «시세 조정»을 쓰세요.' : '') + '</p>' +
+    '<label class="bs-lab" style="margin-top:16px;">한 줄 소개 (선택)</label>' +
+    '<input class="bs-in" id="sk-note" placeholder="학용품을 파는 회사예요" value="' + escapeHtml(note) + '">' +
+    (stock && shares
+      ? '<div class="mt-4 p-3" style="background:var(--soft);border-radius:12px;font-size:13.5px;line-height:1.7;">' +
+          '학생들이 모두 <b class="bs-num">' + fmt(shares) + '주</b>를 갖고 있어요.<br>' +
+          '삭제하면 <b>현재 주가로 전부 현금으로 돌려주고</b> 종목이 사라져요.' +
+        '</div>'
+      : '') +
+    '<div class="flex justify-between mt-6 gap-2">' +
+      (stock ? '<button type="button" class="bs-btn bs-btn-d" id="sk-del">삭제</button>' : '<span></span>') +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="sk-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="sk-save" ' + (name.trim() && price > 0 ? '' : 'disabled') + '>저장</button>' +
+      '</div>' +
+    '</div>';
+
+  const root = showModal(stock ? "종목 수정" : "종목 만들기", body, {});
+  const okState = () => { $("#sk-save", root).disabled = !(name.trim() && price > 0); };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "sk-name") { name = e.target.value; okState(); }
+    if (e.target.id === "sk-code") code = e.target.value;
+    if (e.target.id === "sk-price") { price = Math.max(0, Math.round(Number(e.target.value) || 0)); okState(); }
+    if (e.target.id === "sk-note") note = e.target.value;
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "sk-cancel") { closeModal(); return; }
+    if (t.id === "sk-del") { closeModal(); delistStock(stock); return; }
+    if (t.id === "sk-save" && name.trim() && price > 0) {
+      if (stock) {
+        patch((d) => Object.assign({}, d, {
+          stocks: d.stocks.map((x) => (x.id === stock.id
+            ? Object.assign({}, x, { name: name.trim(), code: code.trim(), note: note.trim(), price, prev: x.prev })
+            : x)),
+        }));
+      } else {
+        const st = { id: uid(), name: name.trim(), code: code.trim(), note: note.trim(), price, prev: price, history: [price] };
+        patch((d) => Object.assign({}, d, { stocks: [...d.stocks, st] }));
+      }
+      closeModal(); say("저장했어요.");
+    }
+  });
+}
+
+/* 상장폐지: 보유 학생에게 현재가로 현금 환급 후 종목 삭제 */
+function delistStock(stock) {
+  const holders = holdersOf(stock.id);
+  const at = now();
+  const entries = [];
+  patch((d) => {
+    const students = d.students.map((s) => {
+      const sh = sharesOf(s, stock.id);
+      if (!sh) return s;
+      const back = sh * stock.price;
+      entries.push({ id: uid(), at, kind: "주식", studentId: s.id, studentName: s.name, amount: back,
+        reason: stock.name + " 상장폐지 · " + fmt(sh) + "주 환급" });
+      const holdings = Object.assign({}, s.holdings);
+      delete holdings[stock.id];
+      return Object.assign({}, s, { balance: s.balance + back, holdings });
+    });
+    return Object.assign({}, d, {
+      students,
+      stocks: d.stocks.filter((x) => x.id !== stock.id),
+      log: [...entries, ...d.log].slice(0, 3000),
+    });
+  });
+  say(holders.length ? stock.name + " 삭제 · " + holders.length + "명에게 환급했어요." : stock.name + " 종목을 삭제했어요.");
+}
+
+/* ══════════ 시세 조정 모달 (종목 1개) ══════════ */
+function openPriceModal(stock) {
+  let next = stock.price;
+  const preview = () => {
+    const diff = next - stock.price;
+    const pct = stock.price > 0 ? (diff / stock.price) * 100 : 0;
+    const cls = diff > 0 ? "bs-up" : diff < 0 ? "bs-down" : "bs-flat";
+    const sign = diff > 0 ? "+" : "";
+    return '<div class="bs-num bs-price ' + cls + '">' + fmt(next) + '</div>' +
+      '<div class="bs-num ' + cls + '" style="font-size:14px;font-weight:700;margin-top:2px;">' +
+      sign + fmt(diff) + " (" + sign + pct.toFixed(1) + "%)</div>";
+  };
+  const body =
+    '<div class="text-center" style="background:var(--soft);border-radius:14px;padding:18px 16px;">' +
+      '<div style="font-size:13px;color:var(--dim);">지금 주가</div>' +
+      '<div class="bs-num" style="font-size:20px;font-weight:700;margin-top:2px;">' + fmt(stock.price) + '</div>' +
+      '<div style="font-size:13px;color:var(--dim);margin-top:14px;">바뀔 주가</div>' +
+      '<div id="pv-box" class="mt-1">' + preview() + '</div>' +
+    '</div>' +
+    '<label class="bs-lab" style="margin-top:18px;">퍼센트로 조정</label>' +
+    '<div class="flex gap-2 flex-wrap" id="pv-pcts">' +
+      [-20, -10, -5, -1, 1, 5, 10, 20].map((p) =>
+        '<button type="button" class="bs-chip" data-pct="' + p + '">' + (p > 0 ? "+" : "") + p + '%</button>').join("") +
+    '</div>' +
+    '<label class="bs-lab" style="margin-top:16px;">주가를 직접 입력</label>' +
+    '<input class="bs-in bs-num" id="pv-price" type="number" min="0" step="100" value="' + next + '">' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-chip" id="pv-random">무작위 (±15%)</button>' +
+      '<button type="button" class="bs-chip" id="pv-reset">되돌리기</button>' +
+    '</div>' +
+    '<div class="flex gap-2 justify-end mt-6">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="pv-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="pv-go">시세 반영</button>' +
+    '</div>';
+
+  const root = showModal(stock.name + " 시세 조정", body, {});
+  const sync = (writeInput) => {
+    $("#pv-box", root).innerHTML = preview();
+    if (writeInput) $("#pv-price", root).value = next;
+  };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "pv-price") { next = Math.max(0, Math.round(Number(e.target.value) || 0)); sync(false); }
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    const p = t.getAttribute && t.getAttribute("data-pct");
+    if (p) { next = Math.max(0, Math.round(stock.price * (1 + Number(p) / 100))); sync(true); return; }
+    if (t.id === "pv-random") { const r = (Math.random() * 30 - 15) / 100; next = Math.max(0, Math.round(stock.price * (1 + r))); sync(true); return; }
+    if (t.id === "pv-reset") { next = stock.price; sync(true); return; }
+    if (t.id === "pv-cancel") { closeModal(); return; }
+    if (t.id === "pv-go") {
+      applyPrices([{ id: stock.id, price: next }]);
+      closeModal(); say(stock.name + " 시세를 반영했어요.");
+    }
+  });
+}
+
+/* ══════════ 시세 변동 모달 (전 종목 한꺼번에) ══════════ */
+function openMarketModal() {
+  const stocks = S.data.stocks;
+  const next = {};
+  stocks.forEach((st) => { next[st.id] = st.price; });
+
+  const rowHtml = (st) => {
+    const n = next[st.id];
+    const diff = n - st.price;
+    const pct = st.price > 0 ? (diff / st.price) * 100 : 0;
+    const cls = diff > 0 ? "bs-up" : diff < 0 ? "bs-down" : "bs-flat";
+    const sign = diff > 0 ? "+" : "";
+    return '<div class="py-3" style="border-bottom:1px solid var(--line);">' +
+      '<div class="flex items-center justify-between gap-2 flex-wrap">' +
+        '<div style="min-width:110px;"><div style="font-weight:600;">' + escapeHtml(st.name) + '</div>' +
+          '<div class="bs-num" style="font-size:12.5px;color:var(--dim);">지금 ' + fmt(st.price) + '</div></div>' +
+        '<input class="bs-in bs-num" style="width:120px;" type="number" min="0" step="100" data-mkt-price="' + st.id + '" value="' + n + '">' +
+        '<div class="bs-num ' + cls + '" style="width:118px;text-align:right;font-weight:700;font-size:13.5px;">' +
+          sign + fmt(diff) + '<br><span style="font-weight:500;">' + sign + pct.toFixed(1) + '%</span></div>' +
+      '</div></div>';
+  };
+
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">한 회차에 모든 종목의 주가를 함께 바꿔요. ' +
+    '적용하면 등락 기록이 남고 학생 화면의 그래프가 움직입니다.</p>' +
+    '<div class="flex gap-2 mt-3 mb-1 flex-wrap">' +
+      '<button type="button" class="bs-chip" id="mkt-rand-s">무작위 ±5%</button>' +
+      '<button type="button" class="bs-chip" id="mkt-rand-m">무작위 ±15%</button>' +
+      '<button type="button" class="bs-chip" id="mkt-bull">모두 호황 +10%</button>' +
+      '<button type="button" class="bs-chip" id="mkt-bear">모두 불황 －10%</button>' +
+      '<button type="button" class="bs-chip" id="mkt-reset">되돌리기</button>' +
+    '</div>' +
+    '<div id="mkt-list">' + stocks.map(rowHtml).join("") + '</div>' +
+    '<div class="flex gap-2 justify-end mt-5">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="mkt-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="mkt-go">시세 반영</button>' +
+    '</div>';
+
+  const root = showModal("시세 변동", body, { wide: true });
+  const redraw = () => { $("#mkt-list", root).innerHTML = stocks.map(rowHtml).join(""); };
+  const setAll = (fn) => { stocks.forEach((st) => { next[st.id] = Math.max(0, Math.round(fn(st))); }); redraw(); };
+
+  root.addEventListener("input", (e) => {
+    const id = e.target.getAttribute("data-mkt-price");
+    if (!id) return;
+    next[id] = Math.max(0, Math.round(Number(e.target.value) || 0));
+    /* 입력 중에는 포커스 유지를 위해 해당 줄만 갱신하지 않고 값만 저장 */
+  });
+  root.addEventListener("change", (e) => {
+    if (e.target.getAttribute("data-mkt-price")) redraw();
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "mkt-rand-s") { setAll((st) => st.price * (1 + (Math.random() * 10 - 5) / 100)); return; }
+    if (t.id === "mkt-rand-m") { setAll((st) => st.price * (1 + (Math.random() * 30 - 15) / 100)); return; }
+    if (t.id === "mkt-bull") { setAll((st) => st.price * 1.1); return; }
+    if (t.id === "mkt-bear") { setAll((st) => st.price * 0.9); return; }
+    if (t.id === "mkt-reset") { setAll((st) => st.price); return; }
+    if (t.id === "mkt-cancel") { closeModal(); return; }
+    if (t.id === "mkt-go") {
+      applyPrices(stocks.map((st) => ({ id: st.id, price: next[st.id] })), true);
+      closeModal(); say("이번 회차 시세를 반영했어요.");
+    }
+  });
+}
+
+/* 시세 반영 공통: prev 갱신 + history 추가 (+ 회차 증가). 주가는 최소 1 */
+function applyPrices(list, bumpRound) {
+  patch((d) => {
+    const stocks = d.stocks.map((st) => {
+      const hit = list.find((x) => x.id === st.id);
+      if (!hit) return st;
+      const p = Math.max(1, Math.round(Number(hit.price) || 0));
+      return Object.assign({}, st, { prev: st.price, price: p, history: [...st.history, p].slice(-40) });
+    });
+    const market = bumpRound ? Object.assign({}, d.market, { round: (d.market.round || 0) + 1 }) : d.market;
+    return Object.assign({}, d, { stocks, market });
+  });
+}
+
+/* ══════════ 배당금 지급 모달 ══════════ */
+function openDividendModal() {
+  const stocks = S.data.stocks.filter((st) => totalSharesOf(st.id) > 0);
+  if (!stocks.length) { say("주식을 보유한 학생이 없어요."); return; }
+  let stockId = stocks[0].id;
+  let per = 100;
+
+  const summary = () => {
+    const st = S.data.stocks.find((x) => x.id === stockId);
+    const shares = totalSharesOf(stockId);
+    const people = holdersOf(stockId).length;
+    return '<div style="font-size:13.5px;line-height:1.8;">' +
+      '<b>' + escapeHtml(st.name) + '</b> 보유 ' + people + '명 · 모두 <b class="bs-num">' + fmt(shares) + '주</b><br>' +
+      '지급 총액 <b class="bs-num">' + fmt(shares * per) + '</b> ' + escapeHtml(S.data.currency) +
+    '</div>';
+  };
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">1주당 얼마씩 나눠 줄지 정하면, 그 종목을 가진 학생에게 보유 수만큼 지급해요.</p>' +
+    '<label class="bs-lab" style="margin-top:14px;">종목</label>' +
+    '<select class="bs-in" id="dv-stock">' +
+      stocks.map((st) => '<option value="' + st.id + '">' + escapeHtml(st.name) + '</option>').join("") +
+    '</select>' +
+    '<label class="bs-lab" style="margin-top:16px;">1주당 배당금</label>' +
+    '<input class="bs-in bs-num" id="dv-per" type="number" min="0" step="10" value="' + per + '">' +
+    '<div class="mt-4 p-3" id="dv-sum" style="background:var(--soft);border-radius:12px;">' + summary() + '</div>' +
+    '<div class="flex gap-2 justify-end mt-6">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="dv-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="dv-go">배당 지급</button>' +
+    '</div>';
+
+  const root = showModal("배당금 지급", body, {});
+  const sync = () => { $("#dv-sum", root).innerHTML = summary(); };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "dv-per") { per = Math.max(0, Math.round(Number(e.target.value) || 0)); sync(); }
+  });
+  root.addEventListener("change", (e) => {
+    if (e.target.id === "dv-stock") { stockId = e.target.value; sync(); }
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "dv-cancel") { closeModal(); return; }
+    if (t.id === "dv-go") {
+      if (!per) { say("배당금을 입력해 주세요."); return; }
+      const st = S.data.stocks.find((x) => x.id === stockId);
+      const at = now();
+      const entries = [];
+      patch((d) => {
+        const students = d.students.map((s) => {
+          const sh = sharesOf(s, stockId);
+          if (!sh) return s;
+          const amt = sh * per;
+          entries.push({ id: uid(), at, kind: "배당", studentId: s.id, studentName: s.name, amount: amt,
+            reason: st.name + " 배당 · " + fmt(sh) + "주" });
+          return Object.assign({}, s, { balance: s.balance + amt });
+        });
+        return Object.assign({}, d, { students, log: [...entries, ...d.log].slice(0, 3000) });
+      });
+      closeModal();
+      say(entries.length ? entries.length + "명에게 배당금을 지급했어요." : "지급할 대상이 없어요.");
+    }
+  });
+}
+
+/* ══════════ 학생 매수/매도 모달 ══════════ */
+function openTradeModal(stock, side) {
+  const me = S.data.students.find((s) => s.id === S.meId);
+  if (!me) return;
+  const buying = side === "buy";
+  const have = sharesOf(me, stock.id);
+  const maxQty = buying ? (stock.price > 0 ? Math.floor(me.balance / stock.price) : 0) : have;
+  let qty = maxQty > 0 ? 1 : 0;
+
+  const summary = () => {
+    const total = qty * stock.price;
+    const after = buying ? me.balance - total : me.balance + total;
+    return '<div class="flex justify-between py-1"><span style="color:var(--dim);">' + (buying ? "드는 돈" : "받는 돈") + '</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(total) + '</span></div>' +
+      '<div class="flex justify-between py-1"><span style="color:var(--dim);">거래 후 지갑</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(after) + '</span></div>' +
+      '<div class="flex justify-between py-1"><span style="color:var(--dim);">거래 후 보유</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(buying ? have + qty : have - qty) + '주</span></div>';
+  };
+  const body =
+    '<div class="text-center" style="background:var(--soft);border-radius:14px;padding:16px;">' +
+      '<div style="font-weight:700;font-size:16px;">' + escapeHtml(stock.name) + '</div>' +
+      '<div class="bs-num bs-price mt-1">' + fmt(stock.price) + '</div>' +
+      '<div class="mt-1">' + changeBadge(stock) + '</div>' +
+    '</div>' +
+    '<div class="flex justify-between mt-4" style="font-size:13.5px;color:var(--dim);">' +
+      '<span>내 지갑 <b class="bs-num" style="color:var(--ink);">' + fmt(me.balance) + '</b></span>' +
+      '<span>보유 <b class="bs-num" style="color:var(--ink);">' + fmt(have) + '주</b></span>' +
+    '</div>' +
+    '<label class="bs-lab" style="margin-top:16px;">몇 주?</label>' +
+    '<div class="bs-qty">' +
+      '<button type="button" id="tq-minus">－</button>' +
+      '<input class="bs-in bs-num" id="tq-input" type="number" min="0" max="' + maxQty + '" value="' + qty + '">' +
+      '<button type="button" id="tq-plus">＋</button>' +
+      '<button type="button" class="bs-chip" id="tq-max" style="flex-shrink:0;">최대</button>' +
+    '</div>' +
+    '<div class="bs-num" style="font-size:12.5px;color:var(--dim);margin-top:6px;">최대 ' + fmt(maxQty) + '주까지 가능해요.</div>' +
+    '<div class="mt-4 p-3" id="tq-sum" style="background:var(--soft);border-radius:12px;font-size:14px;">' + summary() + '</div>' +
+    '<div class="flex gap-2 justify-end mt-6">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="tq-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="tq-go" ' + (qty > 0 ? '' : 'disabled') + '>' + (buying ? "사기" : "팔기") + '</button>' +
+    '</div>';
+
+  const root = showModal(buying ? "주식 사기" : "주식 팔기", body, {});
+  const sync = () => {
+    $("#tq-input", root).value = qty;
+    $("#tq-sum", root).innerHTML = summary();
+    $("#tq-go", root).disabled = qty <= 0;
+  };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "tq-input") {
+      const raw = e.target.value;
+      qty = Math.max(0, Math.min(maxQty, Math.floor(Number(raw) || 0)));
+      /* 최대치를 넘겨 적으면 곧바로 최대치로 고쳐 보여 준다 (지우는 중이면 건드리지 않음) */
+      if (raw !== "" && String(qty) !== raw) e.target.value = qty;
+      $("#tq-sum", root).innerHTML = summary();
+      $("#tq-go", root).disabled = qty <= 0;
+    }
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "tq-minus") { qty = Math.max(0, qty - 1); sync(); return; }
+    if (t.id === "tq-plus") { qty = Math.min(maxQty, qty + 1); sync(); return; }
+    if (t.id === "tq-max") { qty = maxQty; sync(); return; }
+    if (t.id === "tq-cancel") { closeModal(); return; }
+    if (t.id === "tq-go" && qty > 0) { closeModal(); doTrade(stock.id, side, qty); }
+  });
+}
+
 /* ══════════════════════════════════════════════════════════
    교사 화면 — 학급 홈
    ══════════════════════════════════════════════════════════ */
@@ -1088,7 +1554,8 @@ function renderFinancePage() {
   const students = d.students;
   const wallet = students.reduce((a, s) => a + s.balance, 0);
   const saved = students.reduce((a, s) => a + (s.savings || 0), 0);
-  const total = wallet + saved;
+  const invested = students.reduce((a, s) => a + stockAssetOf(s).val, 0);
+  const total = wallet + saved + invested;
   const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
 
   let html = PageHead("재테크", "지갑에서 예금으로 옮기고 이자를 붙여 복리를 체험시켜요.",
@@ -1098,14 +1565,16 @@ function renderFinancePage() {
 
   html += '<div class="grid gap-4 mb-5" style="grid-template-columns:repeat(auto-fit, minmax(268px, 1fr));">';
   html += '<div class="bs-card bs-card-pad">' +
-    '<div style="font-size:13.5px;color:var(--dim);">학급 총 통화량</div>' +
+    '<div style="font-size:13.5px;color:var(--dim);">학급 총 자산</div>' +
     '<div class="bs-num" style="font-size:30px;font-weight:800;letter-spacing:-.03em;margin-top:6px;">' + fmt(total) + ' <span style="font-size:14px;font-weight:500;color:var(--dim);">' + escapeHtml(d.currency) + '</span></div>' +
-    '<div class="bs-split mt-4"><i style="width:' + pct(wallet) + '%;background:var(--green);"></i><i style="width:' + pct(saved) + '%;background:var(--coin);"></i></div>' +
+    '<div class="bs-split mt-4"><i style="width:' + pct(wallet) + '%;background:var(--green);"></i><i style="width:' + pct(saved) + '%;background:var(--coin);"></i><i style="width:' + pct(invested) + '%;background:var(--blue);"></i></div>' +
     '<div class="mt-4" style="font-size:14px;">' +
       '<div class="flex items-center justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--green);display:inline-block;"></i>쓸 수 있는 돈</span>' +
       '<span class="bs-num" style="font-weight:700;">' + fmt(wallet) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(wallet) + '%)</span></span></div>' +
       '<div class="flex items-center justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--coin);display:inline-block;"></i>예금</span>' +
       '<span class="bs-num" style="font-weight:700;">' + fmt(saved) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(saved) + '%)</span></span></div>' +
+      '<div class="flex items-center justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--blue);display:inline-block;"></i>주식</span>' +
+      '<span class="bs-num" style="font-weight:700;">' + fmt(invested) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(invested) + '%)</span></span></div>' +
     '</div></div>';
   html += '<div class="bs-card bs-card-pad">' +
     '<div class="flex items-center justify-between"><span style="font-size:15px;font-weight:700;">은행</span></div>' +
@@ -1122,12 +1591,14 @@ function renderFinancePage() {
     html += Empty("학급 홈에서 명단을 먼저 만들어 주세요.");
   } else {
     html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
-      '<thead><tr><th>학생</th><th class="bs-r">쓸 수 있는 돈</th><th class="bs-r">예금</th><th class="bs-r">합계</th></tr></thead><tbody>';
+      '<thead><tr><th>학생</th><th class="bs-r">쓸 수 있는 돈</th><th class="bs-r">예금</th><th class="bs-r">주식</th><th class="bs-r">합계</th></tr></thead><tbody>';
     students.forEach((s) => {
+      const sv = stockAssetOf(s).val;
       html += '<tr><td><span class="flex items-center gap-2">' + Avatar(s.name, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
         '<td class="bs-r">' + Coin(s.balance) + '</td>' +
         '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(s.savings || 0) + '</td>' +
-        '<td class="bs-r bs-num" style="font-weight:700;">' + fmt(s.balance + (s.savings || 0)) + '</td></tr>';
+        '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(sv) + '</td>' +
+        '<td class="bs-r bs-num" style="font-weight:700;">' + fmt(s.balance + (s.savings || 0) + sv) + '</td></tr>';
     });
     html += '</tbody></table></div></div>';
   }
@@ -1238,6 +1709,96 @@ function timetableHtml(readOnly) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   교사 화면 — 주식 (가상 종목, 시세는 선생님이 직접 정함)
+   ══════════════════════════════════════════════════════════ */
+function renderStocksPage() {
+  const d = S.data;
+  const stocks = d.stocks;
+  const open = d.market.open;
+
+  let html = PageHead("주식", "종목을 만들고 시세를 직접 정해요. 학생은 지갑 돈으로 사고팔 수 있어요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="mk-toggle">' + (open ? "거래 마감하기" : "거래 열기") + '</button>' +
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="mk-dividend" ' + (stocks.length ? '' : 'disabled') + '>배당금 지급</button>' +
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="mk-batch" ' + (stocks.length ? '' : 'disabled') + '>시세 변동</button>' +
+    '<button type="button" class="bs-btn bs-btn-sm" id="stk-new">＋ 종목 만들기</button>');
+
+  /* 시장 상태 카드 */
+  const totalMarketValue = stocks.reduce((a, st) => a + st.price * totalSharesOf(st.id), 0);
+  html += '<div class="bs-card bs-card-pad mb-4 flex items-center justify-between gap-3 flex-wrap">' +
+    '<span class="bs-mkt">' +
+      '<i class="bs-dot" style="background:' + (open ? "var(--green)" : "var(--mute)") + ';"></i>' +
+      (open ? "거래 열림 · 학생이 사고팔 수 있어요" : "거래 마감 · 학생은 보기만 할 수 있어요") +
+    '</span>' +
+    '<span style="font-size:13.5px;color:var(--dim);">' +
+      '거래 회차 <b class="bs-num" style="color:var(--ink);">' + d.market.round + '</b>회 · ' +
+      '학생 보유 주식 평가액 <b class="bs-num" style="color:var(--ink);">' + fmt(totalMarketValue) + '</b> ' + escapeHtml(d.currency) +
+    '</span>' +
+  '</div>';
+
+  if (!stocks.length) {
+    html += Empty("아직 종목이 없어요.",
+      '<button type="button" class="bs-btn" id="stk-new2">종목 만들기</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" id="stk-sample">예시로 채우기</button>');
+    return html;
+  }
+
+  /* 종목 표 */
+  html += '<div class="bs-card mb-5" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    '<thead><tr><th style="width:190px;">종목</th><th class="bs-r" style="width:120px;">현재가</th>' +
+    '<th style="width:150px;">등락</th><th style="width:90px;">흐름</th>' +
+    '<th style="width:130px;">학생 보유</th><th style="width:200px;"></th></tr></thead><tbody>';
+  stocks.forEach((st) => {
+    const shares = totalSharesOf(st.id);
+    const holders = holdersOf(st.id).length;
+    html += '<tr>' +
+      '<td><div style="font-weight:600;">' + escapeHtml(st.name) + '</div>' +
+        (st.code ? '<div class="bs-tick-code">' + escapeHtml(st.code) + '</div>' : '') +
+        (st.note ? '<div style="font-size:12.5px;color:var(--dim);margin-top:2px;">' + escapeHtml(st.note) + '</div>' : '') + '</td>' +
+      '<td class="bs-r">' + Coin(st.price) + '</td>' +
+      '<td>' + changeBadge(st) + '</td>' +
+      '<td>' + sparkline(st.history, 72, 30) + '</td>' +
+      '<td class="bs-num" style="font-size:13.5px;">' + (shares ? fmt(shares) + '주 · ' + holders + '명' : '<span style="color:var(--mute);">없음</span>') + '</td>' +
+      '<td class="bs-r"><span class="flex gap-2 justify-end">' +
+        '<button type="button" class="bs-btn bs-btn-sm" data-stk-price="' + st.id + '">시세 조정</button>' +
+        '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-stk-edit="' + st.id + '">수정</button>' +
+      '</span></td></tr>';
+  });
+  html += '</tbody></table></div></div>';
+
+  /* 학생별 보유 현황 */
+  const investors = d.students.filter((s) => Object.keys(s.holdings || {}).length);
+  html += '<div style="font-size:15px;font-weight:700;margin-bottom:12px;">학생별 보유 현황</div>';
+  if (!investors.length) {
+    html += Empty("아직 주식을 산 학생이 없어요.");
+  } else {
+    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+      '<thead><tr><th style="width:150px;">학생</th><th>보유 종목</th>' +
+      '<th class="bs-r" style="width:120px;">투자원금</th><th class="bs-r" style="width:120px;">평가금액</th>' +
+      '<th class="bs-r" style="width:130px;">손익</th></tr></thead><tbody>';
+    investors.forEach((s) => {
+      const a = stockAssetOf(s);
+      const cls = a.gain > 0 ? "bs-up" : a.gain < 0 ? "bs-down" : "bs-flat";
+      const sign = a.gain > 0 ? "+" : "";
+      const rate = a.cost > 0 ? " (" + sign + ((a.gain / a.cost) * 100).toFixed(1) + "%)" : "";
+      const tags = Object.keys(s.holdings).map((id) => {
+        const st = d.stocks.find((x) => x.id === id);
+        if (!st) return "";
+        return '<span class="bs-badge" style="background:var(--soft);color:var(--ink);border-radius:999px;padding:5px 12px;">' +
+          escapeHtml(st.name) + ' <b class="bs-num">' + s.holdings[id].shares + '주</b></span>';
+      }).join("");
+      html += '<tr>' +
+        '<td><span class="flex items-center gap-2">' + Avatar(s.name, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
+        '<td><span class="flex gap-2 flex-wrap">' + tags + '</span></td>' +
+        '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(a.cost) + '</td>' +
+        '<td class="bs-r bs-num" style="font-weight:700;">' + fmt(a.val) + '</td>' +
+        '<td class="bs-r bs-num ' + cls + '" style="font-weight:700;">' + sign + fmt(a.gain) + rate + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
    교사 화면 — 설정
    ══════════════════════════════════════════════════════════ */
 function renderSettingsPage() {
@@ -1315,7 +1876,7 @@ function studentAppHtml() {
   const myJob = jobs.find((j) => j.holders.includes(me.id));
   const myLog = log.filter((e) => e.studentId === me.id).slice(0, 20);
   const waiting = (type, refId) => requests.some((r) => r.studentId === me.id && r.type === type && r.refId === refId && r.status === "대기");
-  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"], ["quest", "퀘스트"], ["store", "상점"], ["tt", "시간표"]];
+  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"], ["quest", "퀘스트"], ["store", "상점"], ["stocks", "주식"], ["tt", "시간표"]];
   const total = me.balance + (me.savings || 0);
   const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
 
@@ -1403,9 +1964,81 @@ function studentAppHtml() {
   }
 
   if (S.studentPage === "activity") html += studentActivityHtml(me);
+  if (S.studentPage === "stocks") html += studentStocksHtml(me);
   if (S.studentPage === "tt") html += timetableHtml(true);
 
   html += '</div></div>';
+  return html;
+}
+
+/* ══════════ 학생 모드 — 주식 ══════════ */
+function studentStocksHtml(me) {
+  const d = S.data;
+  const stocks = d.stocks;
+  const open = d.market.open;
+  const a = stockAssetOf(me);
+  const cls = a.gain > 0 ? "bs-up" : a.gain < 0 ? "bs-down" : "bs-flat";
+  const sign = a.gain > 0 ? "+" : "";
+  const rate = a.cost > 0 ? sign + ((a.gain / a.cost) * 100).toFixed(1) + "%" : "0.0%";
+
+  let html = '<div class="bs-card bs-card-pad mb-4">' +
+    '<div class="flex items-center justify-between gap-2 flex-wrap">' +
+      '<div style="font-size:13.5px;color:var(--dim);">내 주식 자산</div>' +
+      '<span class="bs-mkt"><i class="bs-dot" style="background:' + (open ? "var(--green)" : "var(--mute)") + ';"></i>' +
+        (open ? "거래 열림" : "거래 마감") + '</span>' +
+    '</div>' +
+    '<div class="bs-num" style="font-size:32px;font-weight:800;letter-spacing:-.03em;margin-top:4px;">' + fmt(a.val) +
+      ' <span style="font-size:14px;font-weight:500;color:var(--dim);">' + escapeHtml(d.currency) + '</span></div>' +
+    '<div class="mt-3" style="font-size:14px;">' +
+      '<div class="flex justify-between py-1"><span style="color:var(--dim);">투자한 돈</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(a.cost) + '</span></div>' +
+      '<div class="flex justify-between py-1"><span style="color:var(--dim);">평가 손익</span>' +
+        '<span class="bs-num ' + cls + '" style="font-weight:700;">' + sign + fmt(a.gain) + ' (' + rate + ')</span></div>' +
+    '</div></div>';
+
+  if (!stocks.length) return html + Empty("아직 살 수 있는 주식이 없어요.");
+
+  html += '<div class="grid gap-3">';
+  stocks.forEach((st) => {
+    const have = sharesOf(me, st.id);
+    const h = me.holdings && me.holdings[st.id];
+    const canBuy = open && st.price > 0 && me.balance >= st.price;
+    const canSell = open && have > 0;
+    let mine = "";
+    if (h) {
+      const myVal = st.price * h.shares;
+      const myCost = h.avgCost * h.shares;
+      const g = Math.round(myVal - myCost);
+      const gc = g > 0 ? "bs-up" : g < 0 ? "bs-down" : "bs-flat";
+      const gs = g > 0 ? "+" : "";
+      mine = '<div class="mt-3 pt-3" style="border-top:1px solid var(--line);font-size:13.5px;">' +
+        '<div class="flex justify-between py-1"><span style="color:var(--dim);">내 보유</span>' +
+          '<span class="bs-num" style="font-weight:700;">' + fmt(h.shares) + '주 · 평균 ' + fmt(Math.round(h.avgCost)) + '</span></div>' +
+        '<div class="flex justify-between py-1"><span style="color:var(--dim);">평가 손익</span>' +
+          '<span class="bs-num ' + gc + '" style="font-weight:700;">' + gs + fmt(g) + '</span></div></div>';
+    }
+    html += '<div class="bs-card bs-card-pad">' +
+      '<div class="flex items-center justify-between gap-3 flex-wrap">' +
+        '<div style="min-width:120px;">' +
+          '<div style="font-weight:700;font-size:16px;">' + escapeHtml(st.name) + '</div>' +
+          (st.code ? '<div class="bs-tick-code">' + escapeHtml(st.code) + '</div>' : '') +
+          (st.note ? '<div style="font-size:12.5px;color:var(--dim);margin-top:3px;">' + escapeHtml(st.note) + '</div>' : '') +
+        '</div>' +
+        sparkline(st.history, 90, 38) +
+        '<div style="text-align:right;">' +
+          '<div class="bs-num bs-price">' + fmt(st.price) + '</div>' +
+          '<div class="mt-1">' + changeBadge(st) + '</div>' +
+        '</div>' +
+      '</div>' +
+      mine +
+      '<div class="flex gap-2 mt-3">' +
+        '<button type="button" class="bs-btn" style="flex:1;" data-trade-buy="' + st.id + '" ' + (canBuy ? '' : 'disabled') + '>' +
+          (!open ? "거래 마감" : st.price <= 0 ? "거래 불가" : me.balance < st.price ? "돈 부족" : "사기") + '</button>' +
+        '<button type="button" class="bs-btn bs-btn-2" style="flex:1;" data-trade-sell="' + st.id + '" ' + (canSell ? '' : 'disabled') + '>팔기</button>' +
+      '</div>' +
+    '</div>';
+  });
+  html += '</div>';
   return html;
 }
 
@@ -1448,6 +2081,7 @@ const NAV = [
   { group: "경제", ico: "◍", items: [
     { k: "store", ico: "▦", label: "상점" },
     { k: "finance", ico: "▣", label: "재테크" },
+    { k: "stocks", ico: "◈", label: "주식" },
     { k: "jobs", ico: "▧", label: "직업 관리" },
   ] },
   { k: "quests", ico: "❏", label: "퀘스트" },
@@ -1461,6 +2095,7 @@ function pageBody() {
     case "activity": return renderActivityPage();
     case "store": return renderStorePage();
     case "finance": return renderFinancePage();
+    case "stocks": return renderStocksPage();
     case "jobs": return renderJobsPage();
     case "quests": return renderQuestsPage();
     case "tt": return timetableHtml(false);
@@ -1529,9 +2164,11 @@ function bindGlobalEvents() {
     const t = e.target.closest("button, select, input, label") || e.target;
 
     /* ── 학생 모드 전환 ── */
-    if (t.id === "go-student") { S.mode = "student"; S.sel = []; render(); return; }
-    if (t.id === "stu-exit") { openUnlockModal(S.data.pin, () => { /* 이미 학생 화면에서 접근 불가지만 안전망 */ }); return; }
-    if (t.id === "stu-switch") { openUnlockModal(S.data.pin, () => { S.mode = "teacher"; render(); }); return; }
+    if (t.id === "go-student") { S.mode = "student"; S.sel = []; S.meId = null; S.studentPage = "wallet"; render(); return; }
+    /* 이름 목록 화면의 «선생님» → 번호 확인 후 교사 화면으로 */
+    if (t.id === "stu-exit") { openUnlockModal(S.data.pin, () => { S.mode = "teacher"; render(); }); return; }
+    /* 학생 화면의 «바꾸기» → 다른 학생으로 (번호 필요 없음) */
+    if (t.id === "stu-switch") { S.meId = null; S.studentPage = "wallet"; render(); return; }
     if (t.getAttribute("data-pick")) { S.meId = t.getAttribute("data-pick"); S.studentPage = "wallet"; render(); return; }
 
     /* ── 학생 모드 내비게이션 ── */
@@ -1556,6 +2193,10 @@ function bindGlobalEvents() {
     if (questAsk) { studentAsk("퀘스트", questAsk, (S.data.quests.find((q) => q.id === questAsk) || {}).title || ""); return; }
     const storeBuy = t.getAttribute("data-store-buy");
     if (storeBuy) { studentBuyOrAsk(storeBuy); return; }
+    const tradeBuy = t.getAttribute("data-trade-buy");
+    if (tradeBuy) { openTradeModal(S.data.stocks.find((x) => x.id === tradeBuy), "buy"); return; }
+    const tradeSell = t.getAttribute("data-trade-sell");
+    if (tradeSell) { openTradeModal(S.data.stocks.find((x) => x.id === tradeSell), "sell"); return; }
 
     /* ── 교사 내비게이션 ── */
     const nav = t.getAttribute("data-nav");
@@ -1606,6 +2247,17 @@ function bindGlobalEvents() {
     if (t.id === "fin-out") { openBankModal("out"); return; }
     if (t.id === "fin-interest") { payInterest(); return; }
 
+    /* ── 주식 ── */
+    if (t.id === "stk-new" || t.id === "stk-new2") { openStockModal(null); return; }
+    if (t.id === "stk-sample") { fillSampleStocks(); return; }
+    if (t.id === "mk-toggle") { patch((d) => Object.assign({}, d, { market: Object.assign({}, d.market, { open: !d.market.open }) })); say(S.data.market.open ? "거래를 열었어요." : "거래를 마감했어요."); return; }
+    if (t.id === "mk-batch") { openMarketModal(); return; }
+    if (t.id === "mk-dividend") { openDividendModal(); return; }
+    const stkPrice = t.getAttribute("data-stk-price");
+    if (stkPrice) { openPriceModal(S.data.stocks.find((x) => x.id === stkPrice)); return; }
+    const stkEdit = t.getAttribute("data-stk-edit");
+    if (stkEdit) { openStockModal(S.data.stocks.find((x) => x.id === stkEdit)); return; }
+
     /* ── 직업 관리 ── */
     if (t.id === "job-new" || t.id === "job-new2") { openJobModal(null); return; }
     if (t.id === "job-sample") { fillSampleJobs(); return; }
@@ -1637,7 +2289,7 @@ function bindGlobalEvents() {
     if (t.id === "set-mode-instant") { patch((d) => Object.assign({}, d, { storeMode: "instant" })); return; }
     if (t.id === "set-mode-approval") { patch((d) => Object.assign({}, d, { storeMode: "approval" })); return; }
     if (t.id === "set-backup") { download(S.data.className + "-백업-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(S.data, null, 2)); return; }
-    if (t.id === "set-reset-balance") { patch((d) => Object.assign({}, d, { students: d.students.map((s) => Object.assign({}, s, { balance: 0, savings: 0 })) })); say("잔액을 0으로 되돌렸어요."); return; }
+    if (t.id === "set-reset-balance") { patch((d) => Object.assign({}, d, { students: d.students.map((s) => Object.assign({}, s, { balance: 0, savings: 0, holdings: {} })) })); say("잔액과 보유 주식을 초기화했어요."); return; }
     if (t.id === "set-reset-all") { openResetModal(); return; }
   });
 
@@ -1698,6 +2350,52 @@ function bindGlobalEvents() {
 }
 
 /* ── 학생 모드 동작 함수들 ── */
+/* 주식 매수/매도 실행 (검증 포함) */
+function doTrade(stockId, side, qty) {
+  const d = S.data;
+  if (!d.market.open) { say("지금은 거래 시간이 아니에요."); return; }
+  const me = d.students.find((s) => s.id === S.meId);
+  const st = d.stocks.find((x) => x.id === stockId);
+  if (!me || !st) { say("종목을 찾을 수 없어요."); return; }
+  qty = Math.floor(Number(qty) || 0);
+  if (qty <= 0) { say("주 수를 입력해 주세요."); return; }
+
+  const buying = side === "buy";
+  const total = st.price * qty;
+  const have = sharesOf(me, stockId);
+
+  if (buying) {
+    if (st.price <= 0) { say("주가가 0원이라 살 수 없어요."); return; }
+    if (me.balance < total) { say("지갑에 돈이 모자라요."); return; }
+  } else {
+    if (have < qty) { say("가진 주식보다 많이 팔 수 없어요."); return; }
+  }
+
+  const at = now();
+  patch((dd) => {
+    const students = dd.students.map((s) => {
+      if (s.id !== me.id) return s;
+      const holdings = Object.assign({}, s.holdings);
+      const cur = holdings[stockId] || { shares: 0, avgCost: 0 };
+      if (buying) {
+        const newShares = cur.shares + qty;
+        const newAvg = (cur.avgCost * cur.shares + total) / newShares;
+        holdings[stockId] = { shares: newShares, avgCost: newAvg };
+      } else {
+        const left = cur.shares - qty;
+        if (left > 0) holdings[stockId] = { shares: left, avgCost: cur.avgCost };
+        else delete holdings[stockId];
+      }
+      return Object.assign({}, s, { balance: buying ? s.balance - total : s.balance + total, holdings });
+    });
+    const entry = { id: uid(), at, kind: "주식", studentId: me.id, studentName: me.name,
+      amount: buying ? -total : total,
+      reason: st.name + " " + fmt(qty) + "주 " + (buying ? "매수" : "매도") + " (1주 " + fmt(st.price) + ")" };
+    return Object.assign({}, dd, { students, log: [entry, ...dd.log].slice(0, 3000) });
+  });
+  say(st.name + " " + fmt(qty) + "주를 " + (buying ? "샀어요." : "팔았어요."));
+}
+
 function studentAsk(type, refId, label) {
   patch((d) => Object.assign({}, d, { requests: [{ id: uid(), type, refId, studentId: S.meId, at: now(), status: "대기" }, ...d.requests].slice(0, 500) }));
   say(label + " 신청을 보냈어요.");
@@ -1759,6 +2457,16 @@ function fillSampleQuests() {
     { id: uid(), title: "친구 도와주기", reward: 15000, note: "교사 확인 필요", done: [], open: true },
   ] }));
   say("예시 퀘스트 3개를 넣었어요.");
+}
+function fillSampleStocks() {
+  const mk = (name, code, price, note) => ({ id: uid(), name, code, note, price, prev: price, history: [price] });
+  patch((d) => Object.assign({}, d, { stocks: [
+    mk("우리반 문구점", "MUNGU", 10000, "연필과 지우개를 파는 회사"),
+    mk("급식왕", "GUPSIK", 15000, "맛있는 급식을 만드는 회사"),
+    mk("체육관", "SPORTS", 8000, "운동 기구를 빌려주는 회사"),
+    mk("도서관", "BOOKS", 12000, "책을 빌려주는 회사"),
+  ] }));
+  say("예시 종목 4개를 넣었어요.");
 }
 function fillSampleJobs() {
   patch((d) => Object.assign({}, d, { jobs: [

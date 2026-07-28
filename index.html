@@ -1,0 +1,1833 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Choi's · 학급 운영 도구</title>
+<meta name="theme-color" content="#F7F7F8" />
+<meta name="robots" content="noindex, nofollow" />
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable.min.css" />
+<style>
+/* ══════════════════════════════════════════════════════════
+   Choi's — 학급 운영 도구 (순수 HTML/CSS/JavaScript 버전)
+   ══════════════════════════════════════════════════════════ */
+html,body,#root{margin:0;padding:0;min-height:100%;}
+body{background:#F7F7F8;}
+
+.bs{
+  --bg:#F7F7F8; --card:#FFFFFF; --line:#EDEDEF; --ink:#191A1C; --dim:#8C8C93; --mute:#B4B4BA;
+  --dark:#141416; --soft:#F0F0F2; --coin:#F5C33B;
+  --green:#12A05C; --green-bg:#E8F7EE; --red:#DF524A; --red-bg:#FDECEC;
+  --blue:#5B72C4; --blue-bg:#EEF0FB; --orange:#E38A3C; --orange-bg:#FFF2E6;
+  --r:16px;
+  font-family:Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",system-ui,sans-serif;
+  background:var(--bg); color:var(--ink); min-height:100vh; font-size:15px;
+  -webkit-font-smoothing:antialiased;
+}
+.bs *{box-sizing:border-box;}
+.bs button{font-family:inherit;cursor:pointer;}
+.bs :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
+.bs-num{font-variant-numeric:tabular-nums;}
+
+/* ── 유틸리티 (레이아웃) ─────────────────────────────────── */
+.flex{display:flex;} .flex-wrap{flex-wrap:wrap;} .grid{display:grid;}
+.items-center{align-items:center;} .items-start{align-items:flex-start;}
+.justify-between{justify-content:space-between;} .justify-center{justify-content:center;} .justify-end{justify-content:flex-end;}
+.text-center{text-align:center;}
+.mx-auto{margin-left:auto;margin-right:auto;}
+.overflow-x-auto{overflow-x:auto;}
+.gap-2{gap:8px;} .gap-3{gap:12px;} .gap-4{gap:16px;} .gap-7{gap:28px;}
+.gap-x-4{column-gap:16px;} .gap-y-6{row-gap:24px;}
+.mb-3{margin-bottom:12px;} .mb-4{margin-bottom:16px;} .mb-5{margin-bottom:20px;} .mb-7{margin-bottom:28px;}
+.mt-1{margin-top:4px;} .mt-2{margin-top:8px;} .mt-3{margin-top:12px;} .mt-4{margin-top:16px;} .mt-5{margin-top:20px;} .mt-6{margin-top:24px;}
+.p-3{padding:12px;}
+.px-5{padding-left:20px;padding-right:20px;} .px-6{padding-left:24px;padding-right:24px;}
+.pb-3{padding-bottom:12px;} .pb-6{padding-bottom:24px;} .pt-4{padding-top:16px;}
+.py-1{padding-top:4px;padding-bottom:4px;} .py-3{padding-top:12px;padding-bottom:12px;}
+.py-4{padding-top:16px;padding-bottom:16px;} .py-5{padding-top:20px;padding-bottom:20px;}
+.py-6{padding-top:24px;padding-bottom:24px;} .py-7{padding-top:28px;padding-bottom:28px;}
+.py-8{padding-top:32px;padding-bottom:32px;} .py-9{padding-top:36px;padding-bottom:36px;}
+.flex-1{flex:1;} .min-w-0{min-width:0;}
+
+/* 상단 바 */
+.bs-top{background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:40;}
+.bs-mark{font-size:20px;font-weight:800;letter-spacing:-.03em;}
+.bs-mark span{color:var(--green);}
+.bs-pill{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 15px;font-size:14px;color:var(--ink);}
+.bs-pill:hover{background:var(--soft);}
+
+/* 사이드바 */
+.bs-side{width:212px;flex-shrink:0;}
+@media (max-width:1060px){.bs-side{width:176px;}}
+@media (max-width:760px){
+  .bs-shell{gap:12px!important;padding-left:10px!important;padding-right:10px!important;}
+  .bs-side{width:50px;}
+  .bs-lbl{display:none;}
+  .bs-nav button,.bs-group{justify-content:center;padding:12px 0;}
+  .bs-nav .bs-sub{padding-left:0;}
+  .bs-caret{display:none;}
+  .bs-badge-n{margin-left:0;font-size:0;min-width:8px;width:8px;height:8px;padding:0;
+    position:absolute;top:8px;right:7px;}
+  .bs-nav>button,.bs-nav>div>button{position:relative;}
+}
+.bs-nav{display:flex;flex-direction:column;gap:2px;}
+.bs-nav button{display:flex;align-items:center;gap:10px;border:0;background:none;border-radius:12px;
+  padding:11px 13px;font-size:15px;color:var(--ink);text-align:left;width:100%;}
+.bs-nav button:hover{background:#EFEFF1;}
+.bs-nav button[data-on="true"]{background:#EAEAEC;font-weight:700;}
+.bs-nav .bs-sub{padding-left:34px;font-size:14.5px;color:#5C5C63;}
+.bs-nav-ico{width:19px;text-align:center;font-size:15px;flex-shrink:0;}
+.bs-group{display:flex;align-items:center;gap:10px;border:0;background:none;padding:11px 13px;width:100%;
+  font-size:15px;color:var(--ink);border-radius:12px;}
+.bs-group:hover{background:#EFEFF1;}
+.bs-badge-n{margin-left:auto;background:var(--red);color:#fff;border-radius:999px;font-size:11px;
+  min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 5px;font-weight:700;}
+
+/* 카드 */
+.bs-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);}
+.bs-card-pad{padding:20px;}
+
+/* 버튼 */
+.bs-btn{border:0;background:var(--dark);color:#fff;border-radius:999px;padding:10px 18px;font-size:14.5px;font-weight:600;}
+.bs-btn:hover{background:#000;}
+.bs-btn-2{background:var(--soft);color:var(--ink);font-weight:500;}
+.bs-btn-2:hover{background:#E6E6E9;}
+.bs-btn-d{background:var(--red-bg);color:var(--red);font-weight:600;}
+.bs-btn-d:hover{background:#FBDDDB;}
+.bs-btn-sm{padding:7px 13px;font-size:13.5px;}
+.bs-btn:disabled{opacity:.42;cursor:not-allowed;}
+
+.bs-seg{background:var(--soft);border-radius:999px;padding:4px;display:inline-flex;gap:2px;}
+.bs-seg button{border:0;background:none;border-radius:999px;padding:7px 16px;font-size:14px;color:var(--dim);}
+.bs-seg button[data-on="true"]{background:var(--card);color:var(--ink);font-weight:700;box-shadow:0 1px 3px rgba(0,0,0,.06);}
+
+.bs-chip{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:6px 13px;font-size:13.5px;color:var(--dim);}
+.bs-chip[data-on="true"]{border-color:var(--ink);background:var(--ink);color:#fff;font-weight:600;}
+
+/* 배지 */
+.bs-badge{display:inline-block;border-radius:8px;padding:4px 10px;font-size:12.5px;font-weight:700;}
+.bs-b-green{background:var(--green-bg);color:var(--green);}
+.bs-b-red{background:var(--red-bg);color:var(--red);}
+.bs-b-blue{background:var(--blue-bg);color:var(--blue);}
+.bs-b-orange{background:var(--orange-bg);color:var(--orange);}
+.bs-b-gray{background:#8C8C93;color:#fff;border-radius:999px;padding:4px 13px;}
+
+/* 코인 */
+.bs-coin{display:inline-block;width:14px;height:14px;border-radius:50%;background:var(--coin);
+  vertical-align:-2px;margin-right:5px;box-shadow:inset 0 0 0 2.5px rgba(255,255,255,.55);}
+
+/* 표 */
+.bs-tbl{width:100%;border-collapse:collapse;}
+.bs-tbl thead th{background:#FAFAFB;color:var(--dim);font-size:13px;font-weight:500;text-align:left;
+  padding:13px 16px;border-bottom:1px solid var(--line);}
+.bs-tbl tbody td{padding:15px 16px;border-bottom:1px solid var(--line);font-size:14.5px;vertical-align:middle;}
+.bs-tbl tbody tr:last-child td{border-bottom:0;}
+.bs-tbl tbody tr:hover{background:#FCFCFD;}
+.bs-r{text-align:right;}
+
+/* 학생 카드 */
+.bs-stu{position:relative;background:none;border:0;padding:0;width:100%;text-align:center;}
+.bs-av{width:100%;aspect-ratio:1;border-radius:14px;display:grid;place-items:center;color:#fff;
+  font-size:28px;font-weight:700;letter-spacing:-.02em;border:2.5px solid transparent;transition:border-color .12s;}
+.bs-stu[data-sel="true"] .bs-av{border-color:var(--ink);}
+.bs-stu-name{font-size:14px;font-weight:600;margin-top:8px;}
+.bs-stu-bal{font-size:12.5px;color:var(--dim);margin-top:2px;}
+.bs-tick{position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:var(--ink);
+  color:#fff;font-size:12px;display:grid;place-items:center;}
+.bs-pop{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;}
+.bs-pop span{background:rgba(20,20,22,.9);color:#fff;border-radius:999px;padding:6px 14px;font-size:15px;
+  font-weight:700;animation:bs-pop .8s ease-out forwards;}
+@keyframes bs-pop{0%{opacity:0;transform:scale(.7) translateY(6px);}18%{opacity:1;transform:scale(1) translateY(0);}
+  72%{opacity:1;}100%{opacity:0;transform:translateY(-10px);}}
+
+/* 입력 */
+.bs-in{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 13px;font-size:15px;
+  font-family:inherit;color:var(--ink);width:100%;}
+.bs-in:focus{border-color:var(--ink);outline:none;}
+.bs-ta{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:13px;font-size:15px;
+  font-family:inherit;color:var(--ink);width:100%;resize:vertical;line-height:1.7;}
+.bs-ta:focus{border-color:var(--ink);outline:none;}
+.bs-lab{display:block;font-size:13px;color:var(--dim);margin-bottom:6px;}
+
+/* 진행 바 */
+.bs-bar{height:7px;background:var(--soft);border-radius:999px;overflow:hidden;}
+.bs-bar i{display:block;height:100%;background:var(--ink);border-radius:999px;}
+.bs-split{height:9px;border-radius:999px;overflow:hidden;display:flex;background:var(--soft);}
+
+/* 액션 바 */
+.bs-dock{position:sticky;bottom:0;z-index:30;background:var(--card);border-top:1px solid var(--line);
+  box-shadow:0 -8px 24px rgba(0,0,0,.05);animation:bs-up .18s ease-out;}
+@keyframes bs-up{from{transform:translateY(14px);opacity:0;}}
+
+/* 모달 */
+.bs-veil{position:fixed;inset:0;background:rgba(20,20,22,.4);display:grid;place-items:center;padding:16px;
+  z-index:70;animation:bs-fade .14s ease-out;}
+@keyframes bs-fade{from{opacity:0;}}
+.bs-sheet{background:var(--card);border-radius:20px;width:100%;max-width:470px;max-height:88vh;overflow:auto;
+  box-shadow:0 24px 60px rgba(0,0,0,.22);}
+.bs-sheet.wide{max-width:700px;}
+.bs-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:var(--dark);color:#fff;
+  padding:12px 20px;border-radius:999px;font-size:14px;z-index:90;max-width:90vw;text-align:center;
+  box-shadow:0 8px 24px rgba(0,0,0,.2);animation:bs-fade .14s ease-out;}
+
+/* 시간표 */
+.bs-tt{width:100%;border-collapse:separate;border-spacing:0;}
+.bs-tt th,.bs-tt td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);text-align:center;padding:0;}
+.bs-tt tr td:last-child,.bs-tt tr th:last-child{border-right:0;}
+.bs-tt tbody tr:last-child td{border-bottom:0;}
+.bs-tt thead th{background:#FAFAFB;color:var(--dim);font-size:13px;font-weight:500;padding:12px 0;}
+.bs-tt input{border:0;background:transparent;text-align:center;width:100%;padding:14px 4px;font-size:14.5px;
+  font-family:inherit;color:var(--ink);}
+.bs-tt input:focus{outline:none;background:#F6F6F8;}
+
+@media (prefers-reduced-motion:reduce){.bs *{animation-duration:.001s!important;transition:none!important;}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script>
+"use strict";
+/* ══════════════════════════════════════════════════════════
+   Choi's — 학급 운영 도구 (Vanilla JS)
+
+   저장소:
+     1) 아래 CONFIG 에 Supabase 주소를 적으면 그 서버에 저장 (여러 기기 공유)
+     2) 적지 않으면 이 브라우저 안에만 저장 (localStorage)
+   ══════════════════════════════════════════════════════════ */
+
+/* ── 여기만 고치면 여러 기기(학생 태블릿 등)에서 같은 데이터를 공유할 수 있어요 ── */
+const CONFIG = {
+  supabaseUrl: "",   // 예: "https://abcdefgh.supabase.co"
+  supabaseKey: "",   // Project API keys 의 anon public 키
+  rowId: "main",     // 한 계정으로 여러 학급을 쓸 때만 바꾸세요
+};
+
+const KEY = "choisclass:v1";
+const DAYS = ["월", "화", "수", "목", "금"];
+const SB = CONFIG.supabaseUrl && CONFIG.supabaseKey ? CONFIG : null;
+const ROW = CONFIG.rowId || "main";
+
+/* ── 저장소 ───────────────────────────────────────────── */
+const sbHeaders = SB
+  ? { apikey: SB.supabaseKey, Authorization: "Bearer " + SB.supabaseKey, "Content-Type": "application/json" }
+  : null;
+
+async function sbRead() {
+  const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?id=eq." + ROW + "&select=data,updated_at", { headers: sbHeaders });
+  if (!r.ok) throw new Error("read failed");
+  const rows = await r.json();
+  return rows[0] || null;
+}
+async function sbWrite(data) {
+  const body = JSON.stringify({ id: ROW, data, updated_at: new Date().toISOString() });
+  const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?on_conflict=id", {
+    method: "POST",
+    headers: Object.assign({}, sbHeaders, { Prefer: "resolution=merge-duplicates" }),
+    body,
+  });
+  if (!r.ok) throw new Error("write failed");
+}
+
+const store = {
+  mode: SB ? "server" : "local",
+  async load() {
+    try {
+      if (this.mode === "server") {
+        const row = await sbRead();
+        return { data: row ? row.data : null, stamp: row ? row.updated_at : 0 };
+      }
+      const raw = window.localStorage.getItem(KEY);
+      return { data: raw ? JSON.parse(raw) : null, stamp: 0 };
+    } catch (e) {
+      return { data: null, stamp: 0 };
+    }
+  },
+  async save(data) {
+    try {
+      if (this.mode === "server") { await sbWrite(data); return true; }
+      window.localStorage.setItem(KEY, JSON.stringify(data));
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+  async stamp() {
+    if (this.mode !== "server") return 0;
+    try { const row = await sbRead(); return row ? row.updated_at : 0; } catch (e) { return 0; }
+  },
+};
+
+/* ── 기본 데이터 ──────────────────────────────────────── */
+const DEFAULT_DATA = {
+  version: 1,
+  className: "우리 반",
+  currency: "포인트",
+  interestRate: 3.5,
+  pin: "",
+  storeMode: "instant",
+  students: [],
+  items: [],
+  quests: [],
+  jobs: [],
+  requests: [],
+  timetable: { periods: 6, cells: {} },
+  log: [],
+};
+
+const uid = () => Math.random().toString(36).slice(2, 10);
+const fmt = (n) => Number(n || 0).toLocaleString("ko-KR");
+const now = () => Date.now();
+const when = (t) =>
+  new Date(t).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+
+const REASONS = ["발표", "도움", "숙제", "정리", "성실", "칭찬", "지각", "규칙 위반", "미제출"];
+const KINDS = ["지급", "차감", "구매", "퀘스트", "급여", "이자", "입금", "출금"];
+const CATS = ["간식", "쿠폰", "특권", "학용품", "기타"];
+
+const AV = ["#F2A15C", "#5B8DEF", "#4FB980", "#B884E0", "#E4739B", "#E0B341", "#5FBCC8", "#A08A6B", "#7C86D6", "#D4785C"];
+function avColor(seed) {
+  let h = 0;
+  seed = seed || "?";
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) % 9973;
+  return AV[h % AV.length];
+}
+
+function migrate(raw) {
+  const d = Object.assign({}, DEFAULT_DATA, raw || {});
+  d.timetable = Object.assign({}, DEFAULT_DATA.timetable, d.timetable || {});
+  d.students = (d.students || []).map((s) => Object.assign({ savings: 0, memo: "" }, s, { balance: Number(s.balance) || 0 }));
+  d.items = (d.items || []).map((i) => Object.assign({ category: "기타" }, i));
+  d.quests = (d.quests || []).map((q) => Object.assign({ open: true }, q, { done: q.done || [] }));
+  ["jobs", "requests", "log"].forEach((k) => { if (!Array.isArray(d[k])) d[k] = []; });
+  return d;
+}
+
+function download(filename, text, mime) {
+  const blob = new Blob([text], { type: mime || "application/json;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = filename; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function escapeHtml(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+/* ══════════════════════════════════════════════════════════
+   전역 상태
+   ══════════════════════════════════════════════════════════ */
+const S = {
+  data: null,
+  ready: false,
+  mode: "teacher",        // "teacher" | "student"
+  page: "home",            // 교사 화면 현재 페이지
+  ecoOpen: true,
+  sel: [],                 // 학급 홈에서 선택된 학생 id들
+  amount: 10000,
+  reason: "",
+  toast: "",
+  modal: null,             // { t: "...", ... }
+  meId: null,              // 학생 모드에서 선택된 학생
+  studentPage: "wallet",
+  activityFilter: { who: "all", kind: "all", q: "" },
+  questFilter: "all",
+};
+let saveTimer = null;
+let myStamp = 0;
+let firstLoad = true;
+let toastTimer = null;
+
+function patch(fn) {
+  S.data = fn(S.data);
+  scheduleSave();
+  render();
+}
+/* 데이터는 바꾸지만 화면 전체를 다시 그리지 않음 (입력창 포커스를 지키기 위함) */
+function patchQuiet(fn) {
+  S.data = fn(S.data);
+  scheduleSave();
+}
+function scheduleSave() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    await store.save(S.data);
+    myStamp = await store.stamp();
+    saveTimer = null;
+  }, 600);
+}
+
+function say(msg) {
+  S.toast = msg;
+  renderToast();
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => { S.toast = ""; renderToast(); }, 2400);
+}
+function renderToast() {
+  let el = document.getElementById("bs-toast-el");
+  if (!S.toast) { if (el) el.remove(); return; }
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "bs-toast-el";
+    el.className = "bs-toast";
+    document.body.appendChild(el);
+  }
+  el.textContent = S.toast;
+}
+
+function popStudents(ids, label) {
+  ids.forEach((id) => {
+    const card = document.querySelector('.bs-stu[data-id="' + id + '"]');
+    if (!card) return;
+    const old = card.querySelector(".bs-pop");
+    if (old) old.remove();
+    const pop = document.createElement("span");
+    pop.className = "bs-pop";
+    pop.innerHTML = "<span>" + escapeHtml(label) + "</span>";
+    card.appendChild(pop);
+    setTimeout(() => pop.remove(), 820);
+  });
+}
+
+function move(ids, delta, why, kind) {
+  if (!ids.length || !delta) return;
+  patch((d) => {
+    const at = now();
+    const entries = [];
+    const students = d.students.map((s) => {
+      if (!ids.includes(s.id)) return s;
+      entries.push({ id: uid(), at, kind, studentId: s.id, studentName: s.name, amount: delta, reason: why || kind });
+      return Object.assign({}, s, { balance: s.balance + delta });
+    });
+    return Object.assign({}, d, { students, log: [...entries, ...d.log].slice(0, 3000) });
+  });
+  popStudents(ids, (delta > 0 ? "+" : "") + fmt(delta));
+}
+
+/* ── 작은 UI 조각들 ───────────────────────────────────── */
+function Avatar(name, size) {
+  const ch = (name || "?").trim().charAt(0) || "?";
+  const style = size
+    ? 'background:' + avColor(name || "?") + ';font-size:' + Math.round(size * 0.42) + 'px;width:' + size + 'px;height:' + size + 'px;aspect-ratio:auto;'
+    : 'background:' + avColor(name || "?") + ';';
+  return '<div class="bs-av" style="' + style + '">' + escapeHtml(ch) + '</div>';
+}
+function Coin(n) {
+  return '<span class="bs-num"><i class="bs-coin"></i>' + fmt(n) + '</span>';
+}
+function PageHead(title, note, buttonsHtml) {
+  return '<div class="flex items-start justify-between gap-3 mb-5 flex-wrap">' +
+    '<div><h2 style="font-size:21px;font-weight:700;letter-spacing:-.02em;">' + escapeHtml(title) + '</h2>' +
+    (note ? '<p style="font-size:13.5px;color:var(--dim);margin-top:4px;">' + note + '</p>' : '') + '</div>' +
+    '<div class="flex gap-2 flex-wrap">' + (buttonsHtml || '') + '</div></div>';
+}
+function Empty(line, actionHtml) {
+  return '<div class="bs-card" style="padding:56px 24px;text-align:center;">' +
+    '<p style="font-size:15px;color:var(--dim);">' + escapeHtml(line) + '</p>' +
+    (actionHtml ? '<div class="mt-4 flex justify-center gap-2 flex-wrap">' + actionHtml + '</div>' : '') + '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   모달 프레임 (열기/닫기 공통 처리)
+   ══════════════════════════════════════════════════════════ */
+function escHandler(e) { if (e.key === "Escape") closeModal(); }
+function closeModal() {
+  const veil = document.getElementById("bs-modal-veil");
+  if (veil) veil.remove();
+  document.removeEventListener("keydown", escHandler);
+}
+function showModal(title, bodyHtml, opts) {
+  closeModal();
+  const veil = document.createElement("div");
+  veil.className = "bs-veil";
+  veil.id = "bs-modal-veil";
+  veil.innerHTML =
+    '<div class="bs-sheet' + (opts && opts.wide ? " wide" : "") + '">' +
+      '<div class="flex items-center justify-between px-6 py-5">' +
+        '<h3 style="font-size:18px;font-weight:700;">' + escapeHtml(title) + "</h3>" +
+        '<button class="bs-btn bs-btn-2 bs-btn-sm" id="bs-modal-close">닫기</button>' +
+      "</div>" +
+      '<div class="px-6 pb-6" id="bs-modal-body">' + bodyHtml + "</div>" +
+    "</div>";
+  document.body.appendChild(veil);
+  veil.addEventListener("click", (e) => { if (e.target === veil) closeModal(); });
+  document.getElementById("bs-modal-close").addEventListener("click", closeModal);
+  document.addEventListener("keydown", escHandler);
+  return document.getElementById("bs-modal-body");
+}
+const $ = (sel, root) => (root || document).querySelector(sel);
+const $$ = (sel, root) => Array.from((root || document).querySelectorAll(sel));
+
+/* ══════════ 학생 선택 모달 (구매/완료처리/배정 등에서 재사용) ══════════ */
+function openStudentPicker(opts) {
+  // opts: { students, title, hint, priceCheck, preset, confirmLabel, onConfirm }
+  let sel = (opts.preset || []).slice();
+  let q = "";
+  const gridHtml = () => {
+    const shown = opts.students.filter((s) => s.name.includes(q.trim()));
+    return shown.map((s) => {
+      const short = opts.priceCheck != null && s.balance < opts.priceCheck;
+      return '<button type="button" class="bs-stu" data-id="' + s.id + '" data-sel="' + sel.includes(s.id) + '"' +
+        (short ? ' style="opacity:.45;"' : '') + '>' +
+        Avatar(s.name) +
+        (sel.includes(s.id) ? '<span class="bs-tick">✓</span>' : '') +
+        '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div>' +
+        '<div class="bs-stu-bal">' + (short ? "부족" : fmt(s.balance)) + '</div>' +
+      '</button>';
+    }).join("");
+  };
+  const body =
+    (opts.hint ? '<p style="font-size:13.5px;color:var(--dim);margin-bottom:12px;">' + opts.hint + '</p>' : '') +
+    '<input class="bs-in" id="sp-q" placeholder="이름 검색" value="">' +
+    '<div class="flex gap-2 mt-3 mb-3">' +
+      '<button type="button" class="bs-chip" id="sp-all">전체 선택</button>' +
+      '<button type="button" class="bs-chip" id="sp-none">해제</button>' +
+    '</div>' +
+    '<div class="grid gap-3 mb-5" id="sp-grid" style="grid-template-columns:repeat(auto-fill, minmax(78px, 1fr));">' + gridHtml() + '</div>' +
+    '<div class="flex gap-2 justify-end">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="sp-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="sp-confirm" ' + (sel.length ? '' : 'disabled') + '>' +
+        (sel.length ? sel.length + '명 확인' : '학생 선택') + '</button>' +
+    '</div>';
+  const root = showModal(opts.title, body, {});
+  const refreshGrid = () => { $("#sp-grid", root).innerHTML = gridHtml(); };
+  const refreshConfirm = () => {
+    const btn = $("#sp-confirm", root);
+    btn.disabled = !sel.length;
+    btn.textContent = sel.length ? sel.length + "명 확인" : "학생 선택";
+  };
+  root.addEventListener("click", (e) => {
+    const card = e.target.closest(".bs-stu");
+    if (card) {
+      const id = card.getAttribute("data-id");
+      sel = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
+      refreshGrid(); refreshConfirm();
+      return;
+    }
+    if (e.target.id === "sp-all") { sel = opts.students.filter((s) => s.name.includes(q.trim())).map((s) => s.id); refreshGrid(); refreshConfirm(); }
+    if (e.target.id === "sp-none") { sel = []; refreshGrid(); refreshConfirm(); }
+    if (e.target.id === "sp-cancel") closeModal();
+    if (e.target.id === "sp-confirm" && sel.length) { const picked = sel.slice(); closeModal(); opts.onConfirm(picked); }
+  });
+  $("#sp-q", root).addEventListener("input", (e) => { q = e.target.value; refreshGrid(); });
+}
+
+/* ══════════ 뽑기 모달 ══════════ */
+function openDrawModal(pool) {
+  const draw = () => pool[Math.floor(Math.random() * pool.length)];
+  let student = draw();
+  const body = () =>
+    '<div class="py-8 text-center">' +
+      '<div class="flex justify-center">' + Avatar(student.name, 92) + '</div>' +
+      '<div style="font-size:30px;font-weight:800;letter-spacing:-.03em;margin-top:16px;">' + escapeHtml(student.name) + '</div>' +
+      '<div class="bs-num" style="color:var(--dim);margin-top:4px;">' + student.no + '번</div>' +
+    '</div>' +
+    '<div class="flex gap-2 justify-center">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="draw-again">다시 뽑기</button>' +
+      '<button type="button" class="bs-btn" id="draw-ok">확인</button>' +
+    '</div>';
+  const root = showModal("뽑기", body(), {});
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "draw-again") { student = draw(); root.innerHTML = body(); }
+    if (e.target.id === "draw-ok") closeModal();
+  });
+}
+
+/* ══════════ 전체 삭제 확인 모달 ══════════ */
+function openResetModal() {
+  const body =
+    '<p style="font-size:14.5px;line-height:1.75;">명단·상점·퀘스트·직업·판·활동 기록이 모두 사라지고 되돌릴 수 없어요. ' +
+    '먼저 설정에서 백업을 내려받아 두는 편이 좋아요.</p>' +
+    '<div class="flex gap-2 justify-end mt-5">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="reset-cancel">취소</button>' +
+      '<button type="button" class="bs-btn bs-btn-d" id="reset-go">전체 삭제</button>' +
+    '</div>';
+  const root = showModal("전체 삭제", body, {});
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "reset-cancel") closeModal();
+    if (e.target.id === "reset-go") {
+      S.data = migrate(null); S.sel = []; scheduleSave(); closeModal(); render(); say("초기화했어요.");
+    }
+  });
+}
+
+/* ══════════ 선생님 화면 잠금 해제(PIN) 모달 ══════════ */
+function openUnlockModal(pin, onOk) {
+  const need = (pin || "").length === 4;
+  let v = "";
+  const body =
+    (need
+      ? '<p style="font-size:14.5px;">선생님 번호 네 자리를 입력해 주세요.</p>' +
+        '<input class="bs-in bs-num mt-3" id="unlock-v" style="max-width:170px;font-size:22px;letter-spacing:.35em;" inputmode="numeric" maxlength="4" value="" autofocus>'
+      : '<p style="font-size:14.5px;line-height:1.75;">선생님 화면으로 돌아갈까요? 설정에서 번호 네 자리를 정해두면 학생이 마음대로 나올 수 없어요.</p>') +
+    '<div class="flex gap-2 justify-end mt-5">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="unlock-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="unlock-ok" ' + (need ? "disabled" : "") + '>돌아가기</button>' +
+    '</div>';
+  const root = showModal("선생님 화면으로", body, {});
+  if (need) {
+    $("#unlock-v", root).addEventListener("input", (e) => {
+      v = e.target.value.replace(/\D/g, "").slice(0, 4);
+      e.target.value = v;
+      $("#unlock-ok", root).disabled = v !== pin;
+    });
+    $("#unlock-v", root).focus();
+  }
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "unlock-cancel") closeModal();
+    if (e.target.id === "unlock-ok" && !e.target.disabled) { closeModal(); onOk(); }
+  });
+}
+
+/* ══════════ 학생 추가 모달 ══════════ */
+function openAddStudentsModal() {
+  let text = "";
+  const namesOf = (t) => t.split(/[\n,\t]+/).map((s) => s.trim()).filter(Boolean);
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);">엑셀에서 복사한 이름을 그대로 붙여넣어도 돼요.</p>' +
+    '<textarea class="bs-ta mt-3" id="add-text" rows="8" placeholder="곽민수\n권찬민\n김시운"></textarea>' +
+    '<div class="flex items-center justify-between mt-4">' +
+      '<span class="bs-num" id="add-count" style="font-size:13.5px;color:var(--dim);">0명 인식</span>' +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="add-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="add-go" disabled>추가</button>' +
+      '</div>' +
+    '</div>';
+  const root = showModal("학생 추가", body, {});
+  $("#add-text", root).addEventListener("input", (e) => {
+    text = e.target.value;
+    const n = namesOf(text).length;
+    $("#add-count", root).textContent = n + "명 인식";
+    $("#add-go", root).disabled = !n;
+  });
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "add-cancel") closeModal();
+    if (e.target.id === "add-go") {
+      const names = namesOf(text);
+      if (!names.length) return;
+      patch((d) => {
+        let no = d.students.reduce((m, s) => Math.max(m, s.no), 0);
+        const added = names.map((n) => ({ id: uid(), no: ++no, name: n, balance: 0, savings: 0, memo: "" }));
+        return Object.assign({}, d, { students: [...d.students, ...added] });
+      });
+      closeModal(); say(names.length + "명을 추가했어요.");
+    }
+  });
+}
+
+/* ══════════ 명단 관리 모달 ══════════ */
+function openManageModal() {
+  const rowHtml = (s) =>
+    '<div class="py-3" data-row="' + s.id + '" style="border-bottom:1px solid var(--line);">' +
+      '<div class="flex items-center gap-2 flex-wrap">' +
+        Avatar(s.name, 32) +
+        '<input class="bs-in" style="max-width:118px;" data-field="name" data-id="' + s.id + '" value="' + escapeHtml(s.name) + '">' +
+        '<input class="bs-in bs-num" style="width:110px;" type="number" data-field="balance" data-id="' + s.id + '" value="' + s.balance + '">' +
+        '<input class="bs-in bs-num" style="width:110px;" type="number" data-field="savings" data-id="' + s.id + '" value="' + (s.savings || 0) + '">' +
+        '<button type="button" class="bs-btn bs-btn-d bs-btn-sm" data-del="' + s.id + '">제외</button>' +
+      '</div>' +
+      '<input class="bs-in mt-2" style="font-size:13.5px;" placeholder="메모" data-field="memo" data-id="' + s.id + '" value="' + escapeHtml(s.memo || "") + '">' +
+    '</div>';
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);margin-bottom:14px;">이름·잔액을 고치거나 학생을 뺄 수 있어요. 메모는 선생님만 봅니다.</p>' +
+    '<div id="manage-list">' + S.data.students.map(rowHtml).join("") + '</div>';
+  const root = showModal("명단 관리", body, { wide: true });
+  root.addEventListener("input", (e) => {
+    const f = e.target.getAttribute("data-field");
+    const id = e.target.getAttribute("data-id");
+    if (!f) return;
+    const val = f === "balance" || f === "savings" ? Number(e.target.value) : e.target.value;
+    patchQuiet((d) => Object.assign({}, d, { students: d.students.map((x) => (x.id === id ? Object.assign({}, x, { [f]: val }) : x)) }));
+  });
+  root.addEventListener("click", (e) => {
+    const id = e.target.getAttribute("data-del");
+    if (id) {
+      patch((d) => Object.assign({}, d, {
+        students: d.students.filter((x) => x.id !== id),
+        jobs: d.jobs.map((j) => Object.assign({}, j, { holders: j.holders.filter((h) => h !== id) })),
+      }));
+      S.sel = S.sel.filter((x) => x !== id);
+      const row = $('[data-row="' + id + '"]', root);
+      if (row) row.remove();
+    }
+  });
+}
+
+/* ══════════ 아이템 수정 모달 ══════════ */
+function openItemModal(item) {
+  let name = item ? item.name : "";
+  let cat = item ? item.category : "간식";
+  let price = item ? item.price : 10000;
+  let limited = item ? item.stock != null : false;
+  let stock = item && item.stock != null ? item.stock : 10;
+  const body = () =>
+    '<label class="bs-lab">아이템명</label>' +
+    '<input class="bs-in" id="it-name" placeholder="뽀로로 비타민" value="' + escapeHtml(name) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">분류</label>' +
+    '<div class="flex gap-2 flex-wrap" id="it-cats">' + CATS.map((c) => '<button type="button" class="bs-chip" data-cat="' + c + '" data-on="' + (cat === c) + '">' + c + '</button>').join("") + '</div>' +
+    '<label class="bs-lab" style="margin-top:16px;">가격</label>' +
+    '<input class="bs-in bs-num" id="it-price" type="number" min="0" value="' + price + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">재고</label>' +
+    '<div class="flex gap-2" id="it-limited">' +
+      '<button type="button" class="bs-chip" data-lim="off" data-on="' + (!limited) + '">무제한</button>' +
+      '<button type="button" class="bs-chip" data-lim="on" data-on="' + (limited) + '">수량 지정</button>' +
+    '</div>' +
+    (limited ? '<input class="bs-in bs-num mt-2" id="it-stock" type="number" min="0" value="' + stock + '">' : '') +
+    '<div class="flex justify-between mt-6 gap-2">' +
+      (item ? '<button type="button" class="bs-btn bs-btn-d" id="it-del">삭제</button>' : '<span></span>') +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="it-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="it-save" ' + (name.trim() ? '' : 'disabled') + '>저장</button>' +
+      '</div>' +
+    '</div>';
+  const root = showModal(item ? "아이템 수정" : "아이템 만들기", body(), {});
+  const rebind = () => { root.innerHTML = body(); };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "it-name") { name = e.target.value; $("#it-save", root).disabled = !name.trim(); }
+    if (e.target.id === "it-price") price = Number(e.target.value);
+    if (e.target.id === "it-stock") stock = Number(e.target.value);
+  });
+  root.addEventListener("click", (e) => {
+    const c = e.target.getAttribute("data-cat");
+    if (c) { cat = c; rebind(); return; }
+    const lim = e.target.getAttribute("data-lim");
+    if (lim) { limited = lim === "on"; rebind(); return; }
+    if (e.target.id === "it-cancel") closeModal();
+    if (e.target.id === "it-del") {
+      patch((d) => Object.assign({}, d, { items: d.items.filter((x) => x.id !== item.id) }));
+      closeModal();
+    }
+    if (e.target.id === "it-save" && name.trim()) {
+      const it = { id: item ? item.id : uid(), name: name.trim(), category: cat, price: Math.max(0, price), stock: limited ? Math.max(0, stock) : null };
+      patch((d) => Object.assign({}, d, { items: item ? d.items.map((x) => (x.id === it.id ? it : x)) : [...d.items, it] }));
+      closeModal(); say("저장했어요.");
+    }
+  });
+}
+
+/* ══════════ 아이템 판매(구매 승인) 모달은 StudentPicker 재사용 ══════════ */
+function openBuyModal(item) {
+  openStudentPicker({
+    students: S.data.students,
+    title: item.name + " 판매",
+    hint: fmt(item.price) + " " + S.data.currency + "이 지갑에서 빠져요. 잔액이 부족한 학생은 건너뜁니다.",
+    priceCheck: item.price,
+    onConfirm: (ids) => {
+      const students = S.data.students;
+      const able = students.filter((s) => ids.includes(s.id) && s.balance >= item.price).map((s) => s.id);
+      const skipped = ids.length - able.length;
+      if (able.length) {
+        move(able, -item.price, item.name + " 구매", "구매");
+        patch((d) => Object.assign({}, d, { items: d.items.map((x) => (x.id === item.id && x.stock != null ? Object.assign({}, x, { stock: Math.max(0, x.stock - able.length) }) : x)) }));
+      }
+      say(able.length ? able.length + "명 판매 완료" + (skipped ? ", " + skipped + "명 잔액 부족으로 제외" : "") : "잔액이 부족해 판매하지 못했어요.");
+    },
+  });
+}
+
+/* ══════════ 퀘스트 수정 모달 ══════════ */
+function openQuestModal(quest) {
+  let title = quest ? quest.title : "";
+  let reward = quest ? quest.reward : 10000;
+  let note = quest ? quest.note : "";
+  const body = () =>
+    '<label class="bs-lab">퀘스트 제목</label>' +
+    '<input class="bs-in" id="q-title" placeholder="아침 독서 10분" value="' + escapeHtml(title) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">보상</label>' +
+    '<input class="bs-in bs-num" id="q-reward" type="number" min="0" value="' + reward + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">안내</label>' +
+    '<input class="bs-in" id="q-note" placeholder="언제, 어떻게 확인할지" value="' + escapeHtml(note) + '">' +
+    (quest && quest.done.length
+      ? '<div class="mt-4 p-3" style="background:var(--soft);border-radius:12px;">' +
+          '<div style="font-size:13.5px;">완료 처리된 학생 ' + quest.done.length + '명</div>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm mt-2" id="q-clear">완료 기록 비우기</button>' +
+          '<p style="font-size:12.5px;color:var(--dim);margin-top:6px;">매일 반복하는 퀘스트라면 비워두면 다시 신청할 수 있어요. 이미 지급한 보상은 그대로예요.</p>' +
+        '</div>'
+      : '') +
+    '<div class="flex justify-between mt-6 gap-2">' +
+      (quest ? '<button type="button" class="bs-btn bs-btn-d" id="q-del">삭제</button>' : '<span></span>') +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="q-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="q-save" ' + (title.trim() ? '' : 'disabled') + '>저장</button>' +
+      '</div>' +
+    '</div>';
+  const root = showModal(quest ? "퀘스트 수정" : "퀘스트 만들기", body(), {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "q-title") { title = e.target.value; $("#q-save", root).disabled = !title.trim(); }
+    if (e.target.id === "q-reward") reward = Number(e.target.value);
+    if (e.target.id === "q-note") note = e.target.value;
+  });
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "q-cancel") closeModal();
+    if (e.target.id === "q-clear") {
+      patch((d) => Object.assign({}, d, { quests: d.quests.map((x) => (x.id === quest.id ? Object.assign({}, x, { done: [] }) : x)) }));
+      closeModal();
+    }
+    if (e.target.id === "q-del") {
+      patch((d) => Object.assign({}, d, { quests: d.quests.filter((x) => x.id !== quest.id) }));
+      closeModal();
+    }
+    if (e.target.id === "q-save" && title.trim()) {
+      const q = { id: quest ? quest.id : uid(), title: title.trim(), reward: Math.max(0, reward), note: note.trim(), done: quest ? quest.done : [], open: quest ? quest.open : true };
+      patch((d) => Object.assign({}, d, { quests: quest ? d.quests.map((x) => (x.id === q.id ? q : x)) : [...d.quests, q] }));
+      closeModal(); say("저장했어요.");
+    }
+  });
+}
+
+function openDoneModal(quest) {
+  openStudentPicker({
+    students: S.data.students,
+    title: quest.title + " 완료 처리",
+    hint: "보상 " + fmt(quest.reward) + " " + S.data.currency + "을 바로 지급해요.",
+    onConfirm: (ids) => {
+      move(ids, quest.reward, "퀘스트 · " + quest.title, "퀘스트");
+      patch((d) => Object.assign({}, d, { quests: d.quests.map((x) => (x.id === quest.id ? Object.assign({}, x, { done: Array.from(new Set([...x.done, ...ids])) }) : x)) }));
+      say(ids.length + "명에게 보상을 지급했어요.");
+    },
+  });
+}
+
+/* ══════════ 직업 수정 모달 ══════════ */
+function openJobModal(job) {
+  let name = job ? job.name : "";
+  let salary = job ? job.salary : 2000000;
+  let duty = job ? job.duty : "";
+  const body =
+    '<label class="bs-lab">직업명</label>' +
+    '<input class="bs-in" id="j-name" placeholder="환경미화원" value="' + escapeHtml(name) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">급여</label>' +
+    '<input class="bs-in bs-num" id="j-salary" type="number" min="0" value="' + salary + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">맡는 일</label>' +
+    '<input class="bs-in" id="j-duty" placeholder="교실 뒤편 정리" value="' + escapeHtml(duty) + '">' +
+    '<div class="flex justify-between mt-6 gap-2">' +
+      (job ? '<button type="button" class="bs-btn bs-btn-d" id="j-del">삭제</button>' : '<span></span>') +
+      '<div class="flex gap-2">' +
+        '<button type="button" class="bs-btn bs-btn-2" id="j-cancel">취소</button>' +
+        '<button type="button" class="bs-btn" id="j-save" ' + (name.trim() ? '' : 'disabled') + '>저장</button>' +
+      '</div>' +
+    '</div>';
+  const root = showModal(job ? "직업 수정" : "직업 만들기", body, {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "j-name") { name = e.target.value; $("#j-save", root).disabled = !name.trim(); }
+    if (e.target.id === "j-salary") salary = Number(e.target.value);
+    if (e.target.id === "j-duty") duty = e.target.value;
+  });
+  root.addEventListener("click", (e) => {
+    if (e.target.id === "j-cancel") closeModal();
+    if (e.target.id === "j-del") {
+      patch((d) => Object.assign({}, d, { jobs: d.jobs.filter((x) => x.id !== job.id) }));
+      closeModal();
+    }
+    if (e.target.id === "j-save" && name.trim()) {
+      const j = { id: job ? job.id : uid(), name: name.trim(), salary: Math.max(0, salary), duty: duty.trim(), holders: job ? job.holders : [] };
+      patch((d) => Object.assign({}, d, { jobs: job ? d.jobs.map((x) => (x.id === j.id ? j : x)) : [...d.jobs, j] }));
+      closeModal(); say("저장했어요.");
+    }
+  });
+}
+
+function openAssignModal(job) {
+  openStudentPicker({
+    students: S.data.students,
+    title: job.name + " 배정",
+    hint: "선택한 학생으로 새로 정해져요.",
+    preset: job.holders,
+    onConfirm: (ids) => {
+      patch((d) => Object.assign({}, d, { jobs: d.jobs.map((j) => (j.id === job.id ? Object.assign({}, j, { holders: ids }) : j)) }));
+      say("배정했어요.");
+    },
+  });
+}
+
+/* ══════════ 예금/출금(교사) 모달 ══════════ */
+function openBankModal(dir) {
+  const inMode = dir === "in";
+  let sel = [];
+  let amt = 10000;
+  const gridHtml = () => S.data.students.map((s) =>
+    '<button type="button" class="bs-stu" data-id="' + s.id + '" data-sel="' + sel.includes(s.id) + '">' +
+      Avatar(s.name) +
+      (sel.includes(s.id) ? '<span class="bs-tick">✓</span>' : '') +
+      '<div class="bs-stu-name">' + escapeHtml(s.name) + '</div>' +
+      '<div class="bs-stu-bal">' + fmt(inMode ? s.balance : (s.savings || 0)) + '</div>' +
+    '</button>'
+  ).join("");
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);">' +
+      (inMode ? "지갑에서 예금으로 옮겨요. 잔액보다 많으면 있는 만큼만 옮깁니다." : "예금에서 지갑으로 돌려줘요. 예금보다 많으면 있는 만큼만 옮깁니다.") +
+    '</p>' +
+    '<label class="bs-lab" style="margin-top:14px;">금액</label>' +
+    '<input class="bs-in bs-num" id="bk-amt" type="number" min="0" value="' + amt + '">' +
+    '<div class="flex gap-2 mt-4 mb-3">' +
+      '<button type="button" class="bs-chip" id="bk-all">전체</button>' +
+      '<button type="button" class="bs-chip" id="bk-none">해제</button>' +
+    '</div>' +
+    '<div class="grid gap-3 mb-5" id="bk-grid" style="grid-template-columns:repeat(auto-fill, minmax(78px, 1fr));">' + gridHtml() + '</div>' +
+    '<div class="flex gap-2 justify-end">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="bk-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="bk-go" disabled>' + (inMode ? "예금" : "출금") + '</button>' +
+    '</div>';
+  const root = showModal(inMode ? "예금 처리" : "출금 처리", body, {});
+  const refreshGrid = () => { $("#bk-grid", root).innerHTML = gridHtml(); };
+  const refreshGo = () => { $("#bk-go", root).disabled = !(sel.length && amt); };
+  root.addEventListener("click", (e) => {
+    const card = e.target.closest(".bs-stu");
+    if (card) { const id = card.getAttribute("data-id"); sel = sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]; refreshGrid(); refreshGo(); return; }
+    if (e.target.id === "bk-all") { sel = S.data.students.map((s) => s.id); refreshGrid(); refreshGo(); }
+    if (e.target.id === "bk-none") { sel = []; refreshGrid(); refreshGo(); }
+    if (e.target.id === "bk-cancel") closeModal();
+    if (e.target.id === "bk-go" && sel.length && amt) {
+      const at = now(); const entries = [];
+      patch((d) => {
+        const ss = d.students.map((s) => {
+          if (!sel.includes(s.id)) return s;
+          const real = inMode ? Math.min(amt, s.balance) : Math.min(amt, s.savings || 0);
+          if (real <= 0) return s;
+          entries.push({ id: uid(), at, kind: inMode ? "입금" : "출금", studentId: s.id, studentName: s.name, amount: inMode ? -real : real, reason: inMode ? "예금 입금" : "예금 출금" });
+          return inMode ? Object.assign({}, s, { balance: s.balance - real, savings: (s.savings || 0) + real })
+                        : Object.assign({}, s, { balance: s.balance + real, savings: (s.savings || 0) - real });
+        });
+        return Object.assign({}, d, { students: ss, log: [...entries, ...d.log].slice(0, 3000) });
+      });
+      closeModal();
+      say(entries.length ? entries.length + "명 처리했어요." : "옮길 금액이 없었어요.");
+    }
+  });
+  $("#bk-amt", root).addEventListener("input", (e) => { amt = Math.max(0, Number(e.target.value)); refreshGo(); });
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 학급 홈
+   ══════════════════════════════════════════════════════════ */
+function resolveRequest(req, ok) {
+  const d0 = S.data;
+  if (ok) {
+    if (req.type === "구매") {
+      const it = d0.items.find((i) => i.id === req.refId);
+      const st = d0.students.find((s) => s.id === req.studentId);
+      if (!it || !st) return;
+      if (st.balance < it.price) { say(st.name + " 학생 잔액이 부족합니다."); return; }
+      if (it.stock != null && it.stock <= 0) { say("품절된 아이템입니다."); return; }
+      move([st.id], -it.price, it.name + " 구매", "구매");
+      patch((d) => Object.assign({}, d, { items: d.items.map((x) => (x.id === it.id && x.stock != null ? Object.assign({}, x, { stock: Math.max(0, x.stock - 1) }) : x)) }));
+    } else {
+      const q = d0.quests.find((x) => x.id === req.refId);
+      if (!q) return;
+      move([req.studentId], q.reward, "퀘스트 · " + q.title, "퀘스트");
+      patch((d) => Object.assign({}, d, { quests: d.quests.map((x) => (x.id === q.id ? Object.assign({}, x, { done: Array.from(new Set([...x.done, req.studentId])) }) : x)) }));
+    }
+  }
+  patch((d) => Object.assign({}, d, { requests: d.requests.map((r) => (r.id === req.id ? Object.assign({}, r, { status: ok ? "승인" : "거절" }) : r)) }));
+}
+
+function renderHomePage() {
+  const d = S.data;
+  const students = d.students, jobs = d.jobs, requests = d.requests, items = d.items, quests = d.quests;
+  const pending = requests.filter((r) => r.status === "대기");
+
+  let html = "";
+  if (pending.length) {
+    html += '<div class="bs-card mb-5" style="border-color:#F3C9C6;">' +
+      '<div class="px-5 py-4 flex items-center gap-2" style="border-bottom:1px solid var(--line);">' +
+        '<span style="font-size:15px;font-weight:700;">승인 대기</span>' +
+        '<span class="bs-badge bs-b-red">' + pending.length + '</span>' +
+      '</div>';
+    pending.forEach((r) => {
+      const st = students.find((s) => s.id === r.studentId);
+      const label = r.type === "구매" ? (items.find((i) => i.id === r.refId) || {}).name : (quests.find((q) => q.id === r.refId) || {}).title;
+      html += '<div class="px-5 py-3 flex items-center gap-3 flex-wrap" style="border-bottom:1px solid var(--line);" data-reqrow="' + r.id + '">' +
+        '<span style="font-weight:600;width:74px;">' + escapeHtml(st ? st.name : "탈퇴") + '</span>' +
+        '<span class="bs-badge bs-b-blue">' + r.type + '</span>' +
+        '<span style="flex:1;min-width:120px;color:var(--dim);font-size:14px;">' + escapeHtml(label || "삭제된 항목") + '</span>' +
+        '<div class="flex gap-2">' +
+          '<button type="button" class="bs-btn bs-btn-sm" data-req-ok="' + r.id + '">승인</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-req-no="' + r.id + '">거절</button>' +
+        '</div></div>';
+    });
+    html += '</div>';
+  }
+
+  html += PageHead("학급 홈", "학생 " + students.length + "명 · 카드를 눌러 선택하면 아래에서 포인트를 보낼 수 있어요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="hp-draw" ' + (students.length ? '' : 'disabled') + '>뽑기</button>' +
+    (students.length ? '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="hp-manage">명단 관리</button>' : '') +
+    '<button type="button" class="bs-btn bs-btn-sm" id="hp-add">＋ 학생 추가</button>');
+
+  if (!students.length) {
+    html += Empty("아직 학생이 없어요.", '<button type="button" class="bs-btn" id="hp-add-empty">이름 붙여넣어 명단 만들기</button>');
+  } else {
+    html += '<div class="flex gap-2 mb-4">' +
+      '<button type="button" class="bs-chip" id="hp-sel-all">전체 선택</button>' +
+      '<button type="button" class="bs-chip" id="hp-sel-none">해제</button>' +
+    '</div>';
+    html += '<div class="grid gap-x-4 gap-y-6" style="grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));">';
+    students.forEach((s) => {
+      const job = jobs.find((j) => j.holders.includes(s.id));
+      html += '<button type="button" class="bs-stu" data-id="' + s.id + '" data-sel="' + S.sel.includes(s.id) + '">' +
+        Avatar(s.name) +
+        (S.sel.includes(s.id) ? '<span class="bs-tick">✓</span>' : '') +
+        '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div>' +
+        '<div class="bs-stu-bal">' + fmt(s.balance) + (job ? ' · ' + escapeHtml(job.name) : '') + '</div>' +
+      '</button>';
+    });
+    html += '</div>';
+  }
+  return html;
+}
+
+function renderDock() {
+  if (S.page !== "home" || !S.sel.length) return "";
+  const students = S.data.students;
+  const selNames = students.filter((s) => S.sel.includes(s.id)).map((s) => s.name);
+  const nameLine = selNames.slice(0, 3).join(", ") + (selNames.length > 3 ? " 외 " + (selNames.length - 3) + "명" : "");
+  return '<div class="bs-dock"><div class="mx-auto px-5 py-4" style="max-width:1240px;">' +
+    '<div class="flex items-center justify-between gap-3 flex-wrap">' +
+      '<div style="font-weight:700;">' + escapeHtml(nameLine) + '<span style="color:var(--dim);font-weight:400;"> · ' + S.sel.length + '명</span></div>' +
+      '<div class="flex items-center gap-2 flex-wrap" id="dock-amounts">' +
+        [1000, 5000, 10000, 50000].map((n) => '<button type="button" class="bs-chip" data-amt="' + n + '" data-on="' + (S.amount === n) + '">' + fmt(n) + '</button>').join("") +
+        '<input class="bs-in bs-num" id="dock-amt-input" style="width:118px;" type="number" min="0" value="' + S.amount + '">' +
+      '</div>' +
+    '</div>' +
+    '<div class="flex gap-2 mt-3 flex-wrap items-center" id="dock-reasons">' +
+      REASONS.map((r) => '<button type="button" class="bs-chip" data-reason="' + escapeHtml(r) + '" data-on="' + (S.reason === r) + '">' + r + '</button>').join("") +
+      '<input class="bs-in" id="dock-reason-input" style="max-width:170px;" placeholder="직접 입력" value="' + (REASONS.includes(S.reason) ? "" : escapeHtml(S.reason)) + '">' +
+    '</div>' +
+    '<div class="flex gap-2 mt-4">' +
+      '<button type="button" class="bs-btn" style="flex:1;" id="dock-give" ' + (S.amount ? '' : 'disabled') + '>보내기</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" style="flex:1;" id="dock-take" ' + (S.amount ? '' : 'disabled') + '>차감</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" id="dock-clear">해제</button>' +
+    '</div>' +
+  '</div></div>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 활동 기록
+   ══════════════════════════════════════════════════════════ */
+function activityRows() {
+  const f = S.activityFilter;
+  return S.data.log.filter((e) =>
+    (f.who === "all" || e.studentId === f.who) &&
+    (f.kind === "all" || e.kind === f.kind) &&
+    (!f.q.trim() || (e.reason || "").includes(f.q.trim()) || (e.studentName || "").includes(f.q.trim()))
+  );
+}
+function activityTableHtml() {
+  const rows = activityRows();
+  const students = S.data.students;
+  if (!rows.length) return Empty("기록이 없어요.");
+  let html = '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    '<thead><tr><th style="width:108px;">일시</th><th style="width:140px;">학생</th><th>내용</th><th class="bs-r" style="width:120px;">금액</th></tr></thead><tbody>';
+  rows.slice(0, 300).forEach((e) => {
+    const st = students.find((s) => s.id === e.studentId);
+    html += '<tr><td class="bs-num" style="color:var(--dim);font-size:13px;">' + when(e.at) + '</td>' +
+      '<td><span class="flex items-center gap-2">' + (st ? Avatar(st.name, 26) : '') + '<span style="font-weight:600;">' + escapeHtml(e.studentName) + '</span></span></td>' +
+      '<td><div style="font-weight:600;">' + escapeHtml(e.kind) + '</div><div style="font-size:13px;color:var(--dim);margin-top:2px;">' + escapeHtml(e.reason || "") + '</div></td>' +
+      '<td class="bs-r bs-num" style="font-weight:700;color:' + (e.amount > 0 ? "var(--ink)" : "var(--red)") + ';">' + (e.amount > 0 ? "+" : "") + fmt(e.amount) + '</td></tr>';
+  });
+  html += '</tbody></table></div>';
+  if (rows.length > 300) html += '<div class="px-5 py-4" style="font-size:13px;color:var(--dim);">최근 300건만 표시해요. 전체는 엑셀로 내려받으세요.</div>';
+  html += '</div>';
+  return html;
+}
+function renderActivityPage() {
+  const d = S.data;
+  const f = S.activityFilter;
+  let html = PageHead("활동 기록", fmt(d.log.length) + "건 · 학부모 문의에 그대로 보여줄 수 있어요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="act-export" ' + (d.log.length ? '' : 'disabled') + '>엑셀 내려받기</button>');
+  html += '<div class="flex gap-2 mb-4 flex-wrap items-center">' +
+    '<select class="bs-in" id="act-who" style="width:auto;">' +
+      '<option value="all">전체 학생</option>' +
+      d.students.map((s) => '<option value="' + s.id + '"' + (f.who === s.id ? ' selected' : '') + '>' + s.no + '. ' + escapeHtml(s.name) + '</option>').join("") +
+    '</select>' +
+    '<input class="bs-in" id="act-q" style="max-width:190px;" placeholder="내용 검색" value="' + escapeHtml(f.q) + '">' +
+  '</div>';
+  html += '<div class="flex gap-2 mb-4 flex-wrap" id="act-kinds">' +
+    ["all"].concat(KINDS).map((k) => '<button type="button" class="bs-chip" data-kind="' + k + '" data-on="' + (f.kind === k) + '">' + (k === "all" ? "전체" : k) + '</button>').join("") +
+  '</div>';
+  html += '<div id="act-table">' + activityTableHtml() + '</div>';
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 상점
+   ══════════════════════════════════════════════════════════ */
+function renderStorePage() {
+  const d = S.data;
+  const grouped = CATS.map((c) => [c, d.items.filter((i) => i.category === c)]).filter((p) => p[1].length);
+  let html = PageHead("상점", "구매를 승인하면 포인트가 빠지고 재고가 줄어요.",
+    '<button type="button" class="bs-btn bs-btn-sm" id="st-new">＋ 아이템 만들기</button>');
+  if (!d.items.length) {
+    html += Empty("아이템이 없어요.",
+      '<button type="button" class="bs-btn" id="st-new2">아이템 만들기</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" id="st-sample">예시로 채우기</button>');
+  } else {
+    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+      '<thead><tr><th style="width:92px;">분류</th><th>아이템</th><th class="bs-r" style="width:130px;">가격</th><th style="width:96px;">재고</th><th style="width:150px;"></th></tr></thead><tbody>';
+    grouped.forEach(([cat, list]) => {
+      list.forEach((it, idx) => {
+        html += '<tr><td>' + (idx === 0 ? '<span class="bs-badge bs-b-blue">' + cat + '</span>' : '') + '</td>' +
+          '<td style="font-weight:600;">' + escapeHtml(it.name) + '</td>' +
+          '<td class="bs-r">' + Coin(it.price) + '</td>' +
+          '<td>' + (it.stock == null ? '<span style="color:var(--mute);font-size:13px;">무제한</span>' : it.stock <= 0 ? '<span class="bs-badge bs-b-red">품절</span>' : '<span class="bs-badge bs-b-green">재고 ' + it.stock + '</span>') + '</td>' +
+          '<td class="bs-r"><span class="flex gap-2 justify-end">' +
+            '<button type="button" class="bs-btn bs-btn-sm" data-buy="' + it.id + '" ' + (!d.students.length || (it.stock != null && it.stock <= 0) ? 'disabled' : '') + '>판매</button>' +
+            '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-edit-item="' + it.id + '">수정</button>' +
+          '</span></td></tr>';
+      });
+    });
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 재테크
+   ══════════════════════════════════════════════════════════ */
+function renderFinancePage() {
+  const d = S.data;
+  const students = d.students;
+  const wallet = students.reduce((a, s) => a + s.balance, 0);
+  const saved = students.reduce((a, s) => a + (s.savings || 0), 0);
+  const total = wallet + saved;
+  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+
+  let html = PageHead("재테크", "지갑에서 예금으로 옮기고 이자를 붙여 복리를 체험시켜요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="fin-in" ' + (students.length ? '' : 'disabled') + '>예금 처리</button>' +
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="fin-out" ' + (students.length ? '' : 'disabled') + '>출금 처리</button>' +
+    '<button type="button" class="bs-btn bs-btn-sm" id="fin-interest" ' + (saved ? '' : 'disabled') + '>이자 지급</button>');
+
+  html += '<div class="grid gap-4 mb-5" style="grid-template-columns:repeat(auto-fit, minmax(268px, 1fr));">';
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:13.5px;color:var(--dim);">학급 총 통화량</div>' +
+    '<div class="bs-num" style="font-size:30px;font-weight:800;letter-spacing:-.03em;margin-top:6px;">' + fmt(total) + ' <span style="font-size:14px;font-weight:500;color:var(--dim);">' + escapeHtml(d.currency) + '</span></div>' +
+    '<div class="bs-split mt-4"><i style="width:' + pct(wallet) + '%;background:var(--green);"></i><i style="width:' + pct(saved) + '%;background:var(--coin);"></i></div>' +
+    '<div class="mt-4" style="font-size:14px;">' +
+      '<div class="flex items-center justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--green);display:inline-block;"></i>쓸 수 있는 돈</span>' +
+      '<span class="bs-num" style="font-weight:700;">' + fmt(wallet) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(wallet) + '%)</span></span></div>' +
+      '<div class="flex items-center justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--coin);display:inline-block;"></i>예금</span>' +
+      '<span class="bs-num" style="font-weight:700;">' + fmt(saved) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(saved) + '%)</span></span></div>' +
+    '</div></div>';
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div class="flex items-center justify-between"><span style="font-size:15px;font-weight:700;">은행</span></div>' +
+    '<div style="background:var(--green-bg);border-radius:14px;padding:26px 16px;text-align:center;margin-top:14px;">' +
+      '<div style="font-size:13.5px;color:var(--green);">예금 이자율</div>' +
+      '<div class="bs-num" id="fin-rate-display" style="font-size:40px;font-weight:800;color:var(--green);line-height:1.1;margin-top:4px;">' + d.interestRate + '%</div>' +
+    '</div>' +
+    '<label class="bs-lab" style="margin-top:16px;">이자율 조절 (한 번 지급할 때 %)</label>' +
+    '<input class="bs-in bs-num" id="fin-rate" type="number" min="0" max="100" step="0.5" value="' + d.interestRate + '">' +
+  '</div>';
+  html += '</div>';
+
+  if (!students.length) {
+    html += Empty("학급 홈에서 명단을 먼저 만들어 주세요.");
+  } else {
+    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+      '<thead><tr><th>학생</th><th class="bs-r">쓸 수 있는 돈</th><th class="bs-r">예금</th><th class="bs-r">합계</th></tr></thead><tbody>';
+    students.forEach((s) => {
+      html += '<tr><td><span class="flex items-center gap-2">' + Avatar(s.name, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
+        '<td class="bs-r">' + Coin(s.balance) + '</td>' +
+        '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(s.savings || 0) + '</td>' +
+        '<td class="bs-r bs-num" style="font-weight:700;">' + fmt(s.balance + (s.savings || 0)) + '</td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 직업 관리
+   ══════════════════════════════════════════════════════════ */
+function renderJobsPage() {
+  const d = S.data;
+  const jobs = d.jobs, students = d.students;
+  let html = PageHead("직업 관리", "직업을 맡기고 급여를 한 번에 보낼 수 있어요.",
+    '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="job-payall" ' + (jobs.length ? '' : 'disabled') + '>급여 보내기</button>' +
+    '<button type="button" class="bs-btn bs-btn-sm" id="job-new">＋ 직업 만들기</button>');
+  if (!jobs.length) {
+    html += Empty("직업이 없어요.",
+      '<button type="button" class="bs-btn" id="job-new2">직업 만들기</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" id="job-sample">예시로 채우기</button>');
+  } else {
+    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+      '<thead><tr><th style="width:170px;">직업명</th><th class="bs-r" style="width:140px;">급여</th><th>구성원</th><th style="width:240px;"></th></tr></thead><tbody>';
+    jobs.forEach((j) => {
+      html += '<tr><td><div style="font-weight:600;">' + escapeHtml(j.name) + '</div>' +
+        (j.duty ? '<div style="font-size:13px;color:var(--dim);margin-top:2px;">' + escapeHtml(j.duty) + '</div>' : '') + '</td>' +
+        '<td class="bs-r">' + Coin(j.salary) + '</td>' +
+        '<td>' + (j.holders.length
+          ? '<span class="flex gap-2 flex-wrap">' + j.holders.map((id) => {
+              const s = students.find((x) => x.id === id);
+              return '<span class="bs-badge" style="background:var(--soft);color:var(--ink);border-radius:999px;padding:5px 12px;">' + (s ? s.no + ". " + escapeHtml(s.name) : "탈퇴") + '</span>';
+            }).join("") + '</span>'
+          : '<span style="color:var(--mute);font-size:13.5px;">비어 있음</span>') + '</td>' +
+        '<td class="bs-r"><span class="flex gap-2 justify-end">' +
+          '<button type="button" class="bs-btn bs-btn-sm" data-job-pay="' + j.id + '" ' + (!j.holders.length || !j.salary ? 'disabled' : '') + '>급여</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-job-assign="' + j.id + '" ' + (!students.length ? 'disabled' : '') + '>배정</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-job-edit="' + j.id + '">수정</button>' +
+        '</span></td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 퀘스트
+   ══════════════════════════════════════════════════════════ */
+function renderQuestsPage() {
+  const d = S.data;
+  const quests = d.quests, students = d.students;
+  const filt = S.questFilter;
+  const shown = quests.filter((q) => filt === "all" || (filt === "open" ? q.open : !q.open));
+  let html = PageHead("퀘스트", "완료를 승인하면 보상이 바로 지급돼요.",
+    '<button type="button" class="bs-btn bs-btn-sm" id="quest-new">＋ 퀘스트 만들기</button>');
+  html += '<div class="bs-seg mb-4" id="quest-filt">' +
+    [["all", "전체"], ["open", "진행중"], ["closed", "종료"]].map((p) => '<button type="button" data-filt="' + p[0] + '" data-on="' + (filt === p[0]) + '">' + p[1] + '</button>').join("") +
+  '</div>';
+  if (!quests.length) {
+    html += Empty("퀘스트가 없어요.",
+      '<button type="button" class="bs-btn" id="quest-new2">퀘스트 만들기</button>' +
+      '<button type="button" class="bs-btn bs-btn-2" id="quest-sample">예시로 채우기</button>');
+  } else if (!shown.length) {
+    html += Empty("이 상태의 퀘스트가 없어요.");
+  } else {
+    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+      '<thead><tr><th style="width:88px;">상태</th><th>퀘스트 제목</th><th class="bs-r" style="width:130px;">보상</th><th style="width:150px;">완료</th><th style="width:190px;"></th></tr></thead><tbody>';
+    shown.forEach((q) => {
+      const total = students.length || 1;
+      html += '<tr><td>' + (q.open ? '<span class="bs-badge bs-b-green">진행중</span>' : '<span class="bs-badge bs-b-gray">종료</span>') + '</td>' +
+        '<td><div style="font-weight:600;">' + escapeHtml(q.title) + '</div>' + (q.note ? '<div style="font-size:13px;color:var(--dim);margin-top:2px;">' + escapeHtml(q.note) + '</div>' : '') + '</td>' +
+        '<td class="bs-r">' + Coin(q.reward) + '</td>' +
+        '<td><div class="flex items-center gap-2"><div class="bs-bar" style="flex:1;"><i style="width:' + Math.min(100, (q.done.length / total) * 100) + '%;"></i></div>' +
+          '<span class="bs-num" style="font-size:13px;font-weight:700;">' + q.done.length + '/' + students.length + '</span></div></td>' +
+        '<td class="bs-r"><span class="flex gap-2 justify-end">' +
+          '<button type="button" class="bs-btn bs-btn-sm" data-quest-done="' + q.id + '" ' + (!students.length ? 'disabled' : '') + '>완료 처리</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-quest-toggle="' + q.id + '">' + (q.open ? "종료" : "재개") + '</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-quest-edit="' + q.id + '">수정</button>' +
+        '</span></td></tr>';
+    });
+    html += '</tbody></table></div></div>';
+  }
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   시간표 (교사/학생 공용)
+   ══════════════════════════════════════════════════════════ */
+function timetableHtml(readOnly) {
+  const tt = S.data.timetable;
+  let html = PageHead("시간표", readOnly ? "이번 주 시간표예요." : "칸을 눌러 바로 적으면 저장돼요.",
+    readOnly ? "" :
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="tt-minus" ' + (tt.periods <= 3 ? 'disabled' : '') + '>교시 －</button>' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="tt-plus" ' + (tt.periods >= 8 ? 'disabled' : '') + '>교시 ＋</button>');
+  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tt">' +
+    '<thead><tr><th style="width:52px;"></th>' + DAYS.map((dd) => '<th>' + dd + '</th>').join("") + '</tr></thead><tbody>';
+  for (let p = 0; p < tt.periods; p++) {
+    html += '<tr><th>' + (p + 1) + '</th>';
+    for (let di = 0; di < DAYS.length; di++) {
+      const k = di + "-" + p;
+      const val = tt.cells[k] || "";
+      html += '<td>' + (readOnly
+        ? '<div style="padding:14px 4px;font-size:14.5px;min-height:46px;">' + escapeHtml(val) + '</div>'
+        : '<input data-tt-cell="' + k + '" value="' + escapeHtml(val) + '" placeholder="—">') + '</td>';
+    }
+    html += '</tr>';
+  }
+  html += '</tbody></table></div></div>';
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 설정
+   ══════════════════════════════════════════════════════════ */
+function renderSettingsPage() {
+  const d = S.data;
+  const modeText = { server: "공용 서버 (Supabase)", local: "이 브라우저에만 저장" }[store.mode];
+  let html = PageHead("설정", "저장 방식: " + modeText, "");
+  html += '<div class="grid gap-4" style="grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));">';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학급 정보</div>' +
+    '<label class="bs-lab">학급 이름</label><input class="bs-in" id="set-classname" value="' + escapeHtml(d.className) + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">화폐 단위</label><input class="bs-in" id="set-currency" value="' + escapeHtml(d.currency) + '">' +
+  '</div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">상점 구매 방식</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">학생이 아이템을 살 때 선생님 승인을 거칠지 정해요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-chip" id="set-mode-instant" data-on="' + (d.storeMode !== "approval") + '">바로 구매</button>' +
+      '<button type="button" class="bs-chip" id="set-mode-approval" data-on="' + (d.storeMode === "approval") + '">승인 후 구매</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생 모드 잠금</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">숫자 4자리를 정해두면 학생 모드에서 나올 때 이 번호를 물어봐요.</p>' +
+    '<input class="bs-in bs-num mt-3" id="set-pin" style="max-width:130px;letter-spacing:.3em;" inputmode="numeric" maxlength="4" placeholder="0000" value="' + escapeHtml(d.pin) + '">' +
+  '</div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">백업</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">학기 말이나 기기를 옮길 때 파일로 내려두면 안전해요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-backup">백업 내려받기</button>' +
+      '<label class="bs-btn bs-btn-2 bs-btn-sm" style="display:inline-block;">백업 복원<input type="file" accept="application/json" id="set-restore" style="display:none;"></label>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;color:var(--red);">새 학년 시작</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">잔액만 되돌리거나, 전부 지우고 처음부터 시작할 수 있어요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-reset-balance">잔액 초기화</button>' +
+      '<button type="button" class="bs-btn bs-btn-d bs-btn-sm" id="set-reset-all">전체 삭제</button>' +
+    '</div></div>';
+
+  html += '</div>';
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   학생 모드
+   ══════════════════════════════════════════════════════════ */
+function studentAppHtml() {
+  const d = S.data;
+  const me = d.students.find((s) => s.id === S.meId);
+  if (!me) {
+    let html = '<div class="bs"><div class="mx-auto px-5 py-9" style="max-width:780px;">' +
+      '<div class="flex items-start justify-between gap-3 mb-7">' +
+        '<div><div style="font-size:13.5px;color:var(--dim);">' + escapeHtml(d.className) + '</div>' +
+        '<h1 style="font-size:24px;font-weight:800;letter-spacing:-.03em;margin-top:4px;">내 이름을 눌러 주세요</h1></div>' +
+        '<button type="button" class="bs-pill" id="stu-exit">선생님</button>' +
+      '</div>';
+    if (!d.students.length) {
+      html += Empty("아직 명단이 없어요. 선생님을 불러 주세요.");
+    } else {
+      html += '<div class="grid gap-x-4 gap-y-6" style="grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));">' +
+        d.students.map((s) => '<button type="button" class="bs-stu" data-pick="' + s.id + '">' + Avatar(s.name) +
+          '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div></button>').join("") + '</div>';
+    }
+    html += '</div></div>';
+    return html;
+  }
+
+  const jobs = d.jobs, quests = d.quests, items = d.items, requests = d.requests, log = d.log;
+  const instant = d.storeMode !== "approval";
+  const myJob = jobs.find((j) => j.holders.includes(me.id));
+  const myLog = log.filter((e) => e.studentId === me.id).slice(0, 20);
+  const waiting = (type, refId) => requests.some((r) => r.studentId === me.id && r.type === type && r.refId === refId && r.status === "대기");
+  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"], ["quest", "퀘스트"], ["store", "상점"], ["tt", "시간표"]];
+  const total = me.balance + (me.savings || 0);
+  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+
+  let html = '<div class="bs">' +
+    '<div class="bs-top">' +
+      '<div class="mx-auto px-5 py-3 flex items-center justify-between gap-3" style="max-width:900px;">' +
+        '<div class="flex items-center gap-3">' + Avatar(me.name, 36) +
+        '<div><div style="font-weight:700;font-size:15px;">' + me.no + '. ' + escapeHtml(me.name) + '</div>' +
+        '<div style="font-size:12.5px;color:var(--dim);">' + escapeHtml(d.className) + '</div></div></div>' +
+        '<button type="button" class="bs-pill" id="stu-switch">바꾸기</button>' +
+      '</div>' +
+      '<div class="mx-auto px-5 pb-3 flex gap-2 overflow-x-auto" style="max-width:900px;">' +
+        NAV.map((n) => '<button type="button" class="bs-chip" data-stupage="' + n[0] + '" data-on="' + (S.studentPage === n[0]) + '">' + n[1] + '</button>').join("") +
+      '</div>' +
+    '</div>' +
+    '<div class="mx-auto px-5 py-6" style="max-width:900px;">';
+
+  if (S.studentPage === "wallet") {
+    html += '<div class="grid gap-4"><div class="bs-card bs-card-pad">' +
+      '<div style="font-size:13.5px;color:var(--dim);">내 계좌</div>' +
+      '<div class="bs-num" style="font-size:34px;font-weight:800;letter-spacing:-.03em;margin-top:4px;">' + fmt(total) + ' <span style="font-size:14px;font-weight:500;color:var(--dim);">' + escapeHtml(d.currency) + '</span></div>' +
+      '<div class="bs-split mt-4"><i style="width:' + pct(me.balance) + '%;background:var(--green);"></i><i style="width:' + pct(me.savings || 0) + '%;background:var(--coin);"></i></div>' +
+      '<div class="mt-4" style="font-size:14px;">' +
+        '<div class="flex justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--green);display:inline-block;"></i>쓸 수 있는 돈</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(me.balance) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(me.balance) + '%)</span></span></div>' +
+        '<div class="flex justify-between py-1"><span class="flex items-center gap-2"><i style="width:8px;height:8px;border-radius:99px;background:var(--coin);display:inline-block;"></i>예금</span>' +
+        '<span class="bs-num" style="font-weight:700;">' + fmt(me.savings || 0) + ' <span style="color:var(--dim);font-weight:400;">(' + pct(me.savings || 0) + '%)</span></span></div>' +
+      '</div>' +
+      '<div class="mt-4 pt-4" style="border-top:1px solid var(--line);">' +
+        '<label class="bs-lab">예금하거나 출금할 금액</label>' +
+        '<div class="flex gap-2 flex-wrap">' +
+          '<input class="bs-in bs-num" id="stu-bank-amt" style="max-width:160px;" type="number" min="0" value="" placeholder="0">' +
+          '<button type="button" class="bs-btn" id="stu-bank-in">예금하기</button>' +
+          '<button type="button" class="bs-btn bs-btn-2" id="stu-bank-out">출금하기</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+    html += '<div class="bs-card bs-card-pad">' +
+      '<div style="font-size:13.5px;color:var(--dim);">내 직업</div>' +
+      '<div style="font-size:20px;font-weight:700;margin-top:4px;">' + (myJob ? escapeHtml(myJob.name) : "없음") + '</div>' +
+      (myJob ? '<div style="font-size:14px;color:var(--dim);margin-top:2px;">' + escapeHtml(myJob.duty || "") + '</div>' +
+        '<div class="mt-2">' + Coin(myJob.salary) + ' <span style="font-size:13px;color:var(--dim);">급여</span></div>' : '') +
+    '</div>';
+    html += '<div class="bs-card" style="overflow:hidden;">' +
+      '<div class="px-5 py-4" style="border-bottom:1px solid var(--line);font-weight:700;font-size:15px;">최근 활동</div>' +
+      (!myLog.length ? '<p class="px-5 py-8 text-center" style="color:var(--dim);font-size:14px;">아직 기록이 없어요.</p>' :
+        myLog.map((e) => '<div class="px-5 py-3 flex items-center gap-3" style="border-bottom:1px solid var(--line);">' +
+          '<div style="flex:1;"><div style="font-weight:600;font-size:14.5px;">' + escapeHtml(e.kind) + '</div>' +
+          '<div style="font-size:12.5px;color:var(--dim);margin-top:2px;">' + escapeHtml(e.reason || "") + ' · ' + when(e.at) + '</div></div>' +
+          '<span class="bs-num" style="font-weight:700;color:' + (e.amount > 0 ? "var(--ink)" : "var(--red)") + ';">' + (e.amount > 0 ? "+" : "") + fmt(e.amount) + '</span></div>').join("")) +
+    '</div></div>';
+  }
+
+  if (S.studentPage === "quest") {
+    const open = quests.filter((q) => q.open);
+    if (!open.length) html += Empty("지금 진행 중인 퀘스트가 없어요.");
+    else {
+      html += '<div class="grid gap-3">' + open.map((q) => {
+        const done = q.done.includes(me.id);
+        const wait = waiting("퀘스트", q.id);
+        return '<div class="bs-card bs-card-pad flex items-center gap-3 flex-wrap">' +
+          '<div style="flex:1;min-width:150px;"><div style="font-weight:700;font-size:16px;">' + escapeHtml(q.title) + '</div>' +
+          (q.note ? '<div style="font-size:13.5px;color:var(--dim);margin-top:2px;">' + escapeHtml(q.note) + '</div>' : '') +
+          '<div class="mt-2">' + Coin(q.reward) + '</div></div>' +
+          '<button type="button" class="bs-btn" data-quest-ask="' + q.id + '" ' + (done || wait ? 'disabled' : '') + '>' + (done ? "완료" : wait ? "확인 중" : "다 했어요") + '</button></div>';
+      }).join("") + '</div>';
+    }
+  }
+
+  if (S.studentPage === "store") {
+    if (!items.length) html += Empty("상점이 비어 있어요.");
+    else {
+      html += '<div class="bs-card" style="overflow:hidden;">' + items.map((it) => {
+        const wait = waiting("구매", it.id);
+        const soldOut = it.stock != null && it.stock <= 0;
+        const poor = me.balance < it.price;
+        return '<div class="px-5 py-4 flex items-center gap-3 flex-wrap" style="border-bottom:1px solid var(--line);">' +
+          '<span class="bs-badge bs-b-blue">' + it.category + '</span>' +
+          '<div style="flex:1;min-width:130px;"><div style="font-weight:600;">' + escapeHtml(it.name) + '</div>' +
+          '<div class="mt-1">' + Coin(it.price) + (it.stock != null ? '<span style="font-size:13px;color:var(--dim);margin-left:8px;">재고 ' + it.stock + '</span>' : '') + '</div></div>' +
+          '<button type="button" class="bs-btn" data-store-buy="' + it.id + '" ' + (soldOut || poor || wait ? 'disabled' : '') + '>' +
+          (soldOut ? "품절" : wait ? "확인 중" : poor ? "포인트 부족" : instant ? "구매하기" : "구매 신청") + '</button></div>';
+      }).join("") + '</div>';
+    }
+  }
+
+  if (S.studentPage === "activity") html += studentActivityHtml(me);
+  if (S.studentPage === "tt") html += timetableHtml(true);
+
+  html += '</div></div>';
+  return html;
+}
+
+function studentActivityKindRows(me) {
+  const kind = S.studentActivityKind || "all";
+  return S.data.log.filter((e) => e.studentId === me.id && (kind === "all" || e.kind === kind));
+}
+function studentActivityListHtml(me) {
+  const rows = studentActivityKindRows(me);
+  if (!rows.length) return Empty("아직 기록이 없어요.");
+  return '<div class="bs-card" style="overflow:hidden;">' + rows.slice(0, 200).map((e) =>
+    '<div class="px-5 py-3 flex items-center gap-3" style="border-bottom:1px solid var(--line);">' +
+      '<div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:14.5px;">' + escapeHtml(e.kind) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--dim);margin-top:2px;">' + escapeHtml(e.reason || "") + ' · ' + when(e.at) + '</div></div>' +
+      '<span class="bs-num" style="font-weight:700;flex-shrink:0;color:' + (e.amount > 0 ? "var(--ink)" : "var(--red)") + ';">' + (e.amount > 0 ? "+" : "") + fmt(e.amount) + '</span></div>'
+  ).join("") + '</div>';
+}
+function studentActivityHtml(me) {
+  const rows = S.data.log.filter((e) => e.studentId === me.id);
+  const got = rows.filter((e) => e.amount > 0).reduce((a, e) => a + e.amount, 0);
+  const spent = rows.filter((e) => e.amount < 0).reduce((a, e) => a + e.amount, 0);
+  const kind = S.studentActivityKind || "all";
+  let html = '<div class="grid gap-3 mb-4" style="grid-template-columns:repeat(auto-fit, minmax(150px, 1fr));">' +
+    '<div class="bs-card bs-card-pad"><div style="font-size:13px;color:var(--dim);">받은 합계</div><div class="bs-num" style="font-size:22px;font-weight:800;margin-top:4px;">+' + fmt(got) + '</div></div>' +
+    '<div class="bs-card bs-card-pad"><div style="font-size:13px;color:var(--dim);">쓴 합계</div><div class="bs-num" style="font-size:22px;font-weight:800;margin-top:4px;color:var(--red);">' + fmt(spent) + '</div></div>' +
+  '</div>';
+  html += '<div class="flex gap-2 mb-4 flex-wrap" id="stuact-kinds">' +
+    ["all"].concat(KINDS).map((k) => '<button type="button" class="bs-chip" data-stuact-kind="' + k + '" data-on="' + (kind === k) + '">' + (k === "all" ? "전체" : k) + '</button>').join("") +
+  '</div>';
+  html += '<div id="stuact-list">' + studentActivityListHtml(me) + '</div>';
+  return html;
+}
+
+/* ══════════════════════════════════════════════════════════
+   교사 화면 — 전체 뼈대(상단바 + 사이드바 + 본문)
+   ══════════════════════════════════════════════════════════ */
+const NAV = [
+  { k: "home", ico: "⌂", label: "학급 홈" },
+  { k: "activity", ico: "▤", label: "활동 기록" },
+  { group: "경제", ico: "◍", items: [
+    { k: "store", ico: "▦", label: "상점" },
+    { k: "finance", ico: "▣", label: "재테크" },
+    { k: "jobs", ico: "▧", label: "직업 관리" },
+  ] },
+  { k: "quests", ico: "❏", label: "퀘스트" },
+  { k: "tt", ico: "▥", label: "시간표" },
+  { k: "settings", ico: "⚙", label: "설정" },
+];
+
+function pageBody() {
+  switch (S.page) {
+    case "home": return renderHomePage();
+    case "activity": return renderActivityPage();
+    case "store": return renderStorePage();
+    case "finance": return renderFinancePage();
+    case "jobs": return renderJobsPage();
+    case "quests": return renderQuestsPage();
+    case "tt": return timetableHtml(false);
+    case "settings": return renderSettingsPage();
+    default: return "";
+  }
+}
+
+function teacherAppHtml() {
+  const d = S.data;
+  const pending = d.requests.filter((r) => r.status === "대기").length;
+  let navHtml = "";
+  NAV.forEach((n) => {
+    if (n.group) {
+      navHtml += '<div><button type="button" class="bs-group" id="nav-eco-toggle">' +
+        '<span class="bs-nav-ico">' + n.ico + '</span><span class="bs-lbl">' + n.group + '</span>' +
+        '<span class="bs-caret" style="margin-left:auto;color:var(--mute);font-size:11px;">' + (S.ecoOpen ? "▾" : "▸") + '</span></button>';
+      if (S.ecoOpen) {
+        n.items.forEach((i) => {
+          navHtml += '<button type="button" class="bs-sub" data-nav="' + i.k + '" data-on="' + (S.page === i.k) + '">' +
+            '<span class="bs-nav-ico">' + i.ico + '</span><span class="bs-lbl">' + i.label + '</span></button>';
+        });
+      }
+      navHtml += '</div>';
+    } else {
+      const badge = n.k === "home" ? pending : 0;
+      navHtml += '<button type="button" data-nav="' + n.k + '" data-on="' + (S.page === n.k) + '">' +
+        '<span class="bs-nav-ico">' + n.ico + '</span><span class="bs-lbl">' + n.label + '</span>' +
+        (badge ? '<span class="bs-badge-n">' + badge + '</span>' : '') + '</button>';
+    }
+  });
+
+  return '<div class="bs">' +
+    '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:1240px;">' +
+      '<div class="bs-mark">Choi<span>\'s</span></div>' +
+      '<div class="flex items-center gap-2">' +
+        '<span class="bs-pill" style="cursor:default;">' + escapeHtml(d.className) + '</span>' +
+        '<button type="button" class="bs-pill" id="go-student">학생 모드</button>' +
+      '</div></div></div>' +
+    '<div class="bs-shell mx-auto flex gap-7 px-5 py-7" style="max-width:1240px;">' +
+      '<aside class="bs-side"><nav class="bs-nav">' + navHtml + '</nav></aside>' +
+      '<main style="flex:1;min-width:0;" id="main-content">' + pageBody() + '</main>' +
+    '</div>' +
+    '<div id="dock-wrap">' + renderDock() + '</div>' +
+  '</div>';
+}
+
+/* ══════════════════════════════════════════════════════════
+   최상위 렌더 + 이벤트 위임(한 번만 등록)
+   ══════════════════════════════════════════════════════════ */
+function render() {
+  const root = document.getElementById("root");
+  if (!S.ready || !S.data) {
+    root.innerHTML = '<div class="bs" style="display:grid;place-items:center;padding:48px;"><p style="color:var(--dim);">불러오는 중…</p></div>';
+    return;
+  }
+  if (S.mode === "student") { root.innerHTML = studentAppHtml(); return; }
+  root.innerHTML = teacherAppHtml();
+}
+
+function bindGlobalEvents() {
+  const root = document.getElementById("root");
+
+  root.addEventListener("click", (e) => {
+    /* 버튼 안의 아이콘/문구 span을 클릭해도 항상 버튼(또는 상호작용 요소) 자체를 대상으로 삼는다 */
+    const t = e.target.closest("button, select, input, label") || e.target;
+
+    /* ── 학생 모드 전환 ── */
+    if (t.id === "go-student") { S.mode = "student"; S.sel = []; render(); return; }
+    if (t.id === "stu-exit") { openUnlockModal(S.data.pin, () => { /* 이미 학생 화면에서 접근 불가지만 안전망 */ }); return; }
+    if (t.id === "stu-switch") { openUnlockModal(S.data.pin, () => { S.mode = "teacher"; render(); }); return; }
+    if (t.getAttribute("data-pick")) { S.meId = t.getAttribute("data-pick"); S.studentPage = "wallet"; render(); return; }
+
+    /* ── 학생 모드 내비게이션 ── */
+    const stuPage = t.getAttribute("data-stupage");
+    if (stuPage) { S.studentPage = stuPage; render(); return; }
+    const stuActKind = t.getAttribute("data-stuact-kind");
+    if (stuActKind) {
+      S.studentActivityKind = stuActKind;
+      $$("#stuact-kinds [data-stuact-kind]").forEach((b) => b.setAttribute("data-on", b.getAttribute("data-stuact-kind") === stuActKind));
+      const me = S.data.students.find((s) => s.id === S.meId);
+      $("#stuact-list").innerHTML = studentActivityListHtml(me);
+      return;
+    }
+    if (t.id === "stu-bank-in" || t.id === "stu-bank-out") {
+      const input = $("#stu-bank-amt");
+      const amt = Math.max(0, Number(input.value) || 0);
+      if (!amt) return;
+      studentBank(t.id === "stu-bank-in" ? "in" : "out", amt);
+      return;
+    }
+    const questAsk = t.getAttribute("data-quest-ask");
+    if (questAsk) { studentAsk("퀘스트", questAsk, (S.data.quests.find((q) => q.id === questAsk) || {}).title || ""); return; }
+    const storeBuy = t.getAttribute("data-store-buy");
+    if (storeBuy) { studentBuyOrAsk(storeBuy); return; }
+
+    /* ── 교사 내비게이션 ── */
+    const nav = t.getAttribute("data-nav");
+    if (nav) { S.page = nav; S.sel = []; render(); return; }
+    if (t.id === "nav-eco-toggle") { S.ecoOpen = !S.ecoOpen; render(); return; }
+
+    /* ── 학급 홈 ── */
+    if (t.id === "hp-draw") { const pool = S.sel.length ? S.data.students.filter((s) => S.sel.includes(s.id)) : S.data.students; if (pool.length) openDrawModal(pool); return; }
+    if (t.id === "hp-manage") { openManageModal(); return; }
+    if (t.id === "hp-add" || t.id === "hp-add-empty") { openAddStudentsModal(); return; }
+    if (t.id === "hp-sel-all") { S.sel = S.data.students.map((s) => s.id); render(); return; }
+    if (t.id === "hp-sel-none") { S.sel = []; render(); return; }
+    const stuCard = t.closest && t.closest(".bs-stu[data-id]");
+    if (stuCard && S.page === "home" && S.mode === "teacher") {
+      const id = stuCard.getAttribute("data-id");
+      S.sel = S.sel.includes(id) ? S.sel.filter((x) => x !== id) : [...S.sel, id];
+      render(); return;
+    }
+    const reqOk = t.getAttribute("data-req-ok");
+    if (reqOk) { resolveRequest(S.data.requests.find((r) => r.id === reqOk), true); return; }
+    const reqNo = t.getAttribute("data-req-no");
+    if (reqNo) { resolveRequest(S.data.requests.find((r) => r.id === reqNo), false); return; }
+
+    /* ── 액션 독(빠른 지급/차감) ── */
+    const amtChip = t.getAttribute("data-amt");
+    if (amtChip) { S.amount = Number(amtChip); render(); return; }
+    const reasonChip = t.getAttribute("data-reason");
+    if (reasonChip) { S.reason = S.reason === reasonChip ? "" : reasonChip; render(); return; }
+    if (t.id === "dock-give") { move(S.sel, S.amount, S.reason, "지급"); say(S.sel.length + "명에게 " + fmt(S.amount) + " 지급"); return; }
+    if (t.id === "dock-take") { move(S.sel, -S.amount, S.reason, "차감"); say(S.sel.length + "명에게서 " + fmt(S.amount) + " 차감"); return; }
+    if (t.id === "dock-clear") { S.sel = []; render(); return; }
+
+    /* ── 활동 기록 ── */
+    if (t.id === "act-export") { exportActivityCsv(); return; }
+    const kindChip = t.getAttribute("data-kind");
+    if (kindChip) { S.activityFilter.kind = kindChip; $$("#act-kinds [data-kind]").forEach((b) => b.setAttribute("data-on", b.getAttribute("data-kind") === kindChip)); $("#act-table").innerHTML = activityTableHtml(); return; }
+
+    /* ── 상점 ── */
+    if (t.id === "st-new" || t.id === "st-new2") { openItemModal(null); return; }
+    if (t.id === "st-sample") { fillSampleItems(); return; }
+    const buyId = t.getAttribute("data-buy");
+    if (buyId) { openBuyModal(S.data.items.find((i) => i.id === buyId)); return; }
+    const editItemId = t.getAttribute("data-edit-item");
+    if (editItemId) { openItemModal(S.data.items.find((i) => i.id === editItemId)); return; }
+
+    /* ── 재테크 ── */
+    if (t.id === "fin-in") { openBankModal("in"); return; }
+    if (t.id === "fin-out") { openBankModal("out"); return; }
+    if (t.id === "fin-interest") { payInterest(); return; }
+
+    /* ── 직업 관리 ── */
+    if (t.id === "job-new" || t.id === "job-new2") { openJobModal(null); return; }
+    if (t.id === "job-sample") { fillSampleJobs(); return; }
+    if (t.id === "job-payall") { paySalaries(); return; }
+    const jobPay = t.getAttribute("data-job-pay");
+    if (jobPay) { paySalaryOne(S.data.jobs.find((j) => j.id === jobPay)); return; }
+    const jobAssign = t.getAttribute("data-job-assign");
+    if (jobAssign) { openAssignModal(S.data.jobs.find((j) => j.id === jobAssign)); return; }
+    const jobEdit = t.getAttribute("data-job-edit");
+    if (jobEdit) { openJobModal(S.data.jobs.find((j) => j.id === jobEdit)); return; }
+
+    /* ── 퀘스트 ── */
+    if (t.id === "quest-new" || t.id === "quest-new2") { openQuestModal(null); return; }
+    if (t.id === "quest-sample") { fillSampleQuests(); return; }
+    const qf = t.getAttribute("data-filt");
+    if (qf) { S.questFilter = qf; render(); return; }
+    const qDone = t.getAttribute("data-quest-done");
+    if (qDone) { openDoneModal(S.data.quests.find((q) => q.id === qDone)); return; }
+    const qToggle = t.getAttribute("data-quest-toggle");
+    if (qToggle) { patch((d) => Object.assign({}, d, { quests: d.quests.map((x) => (x.id === qToggle ? Object.assign({}, x, { open: !x.open }) : x)) })); return; }
+    const qEdit = t.getAttribute("data-quest-edit");
+    if (qEdit) { openQuestModal(S.data.quests.find((q) => q.id === qEdit)); return; }
+
+    /* ── 시간표 ── */
+    if (t.id === "tt-minus") { patch((d) => Object.assign({}, d, { timetable: Object.assign({}, d.timetable, { periods: d.timetable.periods - 1 }) })); return; }
+    if (t.id === "tt-plus") { patch((d) => Object.assign({}, d, { timetable: Object.assign({}, d.timetable, { periods: d.timetable.periods + 1 }) })); return; }
+
+    /* ── 설정 ── */
+    if (t.id === "set-mode-instant") { patch((d) => Object.assign({}, d, { storeMode: "instant" })); return; }
+    if (t.id === "set-mode-approval") { patch((d) => Object.assign({}, d, { storeMode: "approval" })); return; }
+    if (t.id === "set-backup") { download(S.data.className + "-백업-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(S.data, null, 2)); return; }
+    if (t.id === "set-reset-balance") { patch((d) => Object.assign({}, d, { students: d.students.map((s) => Object.assign({}, s, { balance: 0, savings: 0 })) })); say("잔액을 0으로 되돌렸어요."); return; }
+    if (t.id === "set-reset-all") { openResetModal(); return; }
+  });
+
+  root.addEventListener("input", (e) => {
+    const t = e.target;
+    /* 학급 홈 독 - 금액/사유 직접입력 (조용히 반영, 다시그리기 없음) */
+    if (t.id === "dock-amt-input") { S.amount = Math.max(0, Number(t.value) || 0); return; }
+    if (t.id === "dock-reason-input") { S.reason = t.value; return; }
+
+    /* 활동기록 검색(라이브 필터, 표만 갱신) */
+    if (t.id === "act-q") { S.activityFilter.q = t.value; const el = document.getElementById("act-table"); if (el) el.innerHTML = activityTableHtml(); return; }
+
+    /* 시간표 칸 (조용히 반영) */
+    const ttKey = t.getAttribute("data-tt-cell");
+    if (ttKey) { patchQuiet((d) => Object.assign({}, d, { timetable: Object.assign({}, d.timetable, { cells: Object.assign({}, d.timetable.cells, { [ttKey]: t.value }) }) })); return; }
+
+    /* 설정 입력들 (조용히 반영) */
+    if (t.id === "set-classname") { patchQuiet((d) => Object.assign({}, d, { className: t.value })); return; }
+    if (t.id === "set-currency") { patchQuiet((d) => Object.assign({}, d, { currency: t.value })); return; }
+    if (t.id === "set-pin") { t.value = t.value.replace(/\D/g, "").slice(0, 4); patchQuiet((d) => Object.assign({}, d, { pin: t.value })); return; }
+
+    /* 재테크 이자율 (조용히 반영 + 큰 숫자만 즉시 갱신) */
+    if (t.id === "fin-rate") {
+      const v = Math.max(0, Math.min(100, Number(t.value)));
+      patchQuiet((d) => Object.assign({}, d, { interestRate: v }));
+      const disp = document.getElementById("fin-rate-display");
+      if (disp) disp.textContent = v + "%";
+      return;
+    }
+
+    /* 학생 모드 활동기록 검색 없음(필터만) */
+  });
+
+  root.addEventListener("change", (e) => {
+    const t = e.target;
+    if (t.id === "act-who") { S.activityFilter.who = t.value; const el = document.getElementById("act-table"); if (el) el.innerHTML = activityTableHtml(); return; }
+    if (t.id === "set-restore") {
+      const f = t.files && t.files[0];
+      if (!f) return;
+      const r = new FileReader();
+      r.onload = () => {
+        try {
+          const parsed = JSON.parse(String(r.result));
+          if (!parsed || !Array.isArray(parsed.students)) throw new Error("bad file");
+          S.data = migrate(parsed);
+          scheduleSave();
+          render();
+          say("백업을 복원했어요.");
+        } catch (err) {
+          say("읽을 수 없는 파일이에요. 이 도구에서 만든 백업인지 확인해 주세요.");
+        }
+      };
+      r.readAsText(f);
+      t.value = "";
+      return;
+    }
+  });
+}
+
+/* ── 학생 모드 동작 함수들 ── */
+function studentAsk(type, refId, label) {
+  patch((d) => Object.assign({}, d, { requests: [{ id: uid(), type, refId, studentId: S.meId, at: now(), status: "대기" }, ...d.requests].slice(0, 500) }));
+  say(label + " 신청을 보냈어요.");
+}
+function studentBuyOrAsk(itemId) {
+  const d = S.data;
+  const me = d.students.find((s) => s.id === S.meId);
+  const it = d.items.find((i) => i.id === itemId);
+  if (!it || !me) return;
+  const instant = d.storeMode !== "approval";
+  if (!instant) { studentAsk("구매", it.id, it.name); return; }
+  if (me.balance < it.price) { say("포인트가 부족해요."); return; }
+  if (it.stock != null && it.stock <= 0) { say("품절된 아이템이에요."); return; }
+  const at = now();
+  patch((dd) => Object.assign({}, dd, {
+    students: dd.students.map((s) => (s.id === me.id ? Object.assign({}, s, { balance: s.balance - it.price }) : s)),
+    items: dd.items.map((x) => (x.id === it.id && x.stock != null ? Object.assign({}, x, { stock: Math.max(0, x.stock - 1) }) : x)),
+    log: [{ id: uid(), at, kind: "구매", studentId: me.id, studentName: me.name, amount: -it.price, reason: it.name + " 구매" }, ...dd.log].slice(0, 3000),
+  }));
+  say(it.name + "을 구매했어요.");
+}
+function studentBank(dir, amt) {
+  const d = S.data;
+  const me = d.students.find((s) => s.id === S.meId);
+  if (!me) return;
+  const real = dir === "in" ? Math.min(amt, me.balance) : Math.min(amt, me.savings || 0);
+  if (real <= 0) { say("옮길 금액이 없어요."); return; }
+  const at = now();
+  patch((dd) => Object.assign({}, dd, {
+    students: dd.students.map((s) => s.id !== me.id ? s
+      : dir === "in" ? Object.assign({}, s, { balance: s.balance - real, savings: (s.savings || 0) + real })
+                     : Object.assign({}, s, { balance: s.balance + real, savings: (s.savings || 0) - real })),
+    log: [{ id: uid(), at, kind: dir === "in" ? "입금" : "출금", studentId: me.id, studentName: me.name, amount: dir === "in" ? -real : real, reason: dir === "in" ? "예금 입금" : "예금 출금" }, ...dd.log].slice(0, 3000),
+  }));
+  say(dir === "in" ? fmt(real) + " 예금했어요." : fmt(real) + " 출금했어요.");
+}
+
+/* ── 교사 모드 동작 함수들 ── */
+function exportActivityCsv() {
+  const d = S.data;
+  const head = "일시,학생,구분,금액,내용\n";
+  const body = d.log.map((e) => [when(e.at), e.studentName, e.kind, e.amount, (e.reason || "").replace(/,/g, " ")].map((v) => '"' + v + '"').join(",")).join("\n");
+  download(d.className + "-활동기록.csv", "\uFEFF" + head + body, "text/csv;charset=utf-8");
+}
+function fillSampleItems() {
+  patch((d) => Object.assign({}, d, { items: [
+    { id: uid(), name: "뽀로로 비타민", category: "간식", price: 15000, stock: 20 },
+    { id: uid(), name: "사탕", category: "간식", price: 17000, stock: 0 },
+    { id: uid(), name: "자리 바꾸기 쿠폰", category: "쿠폰", price: 300000, stock: 3 },
+    { id: uid(), name: "숙제 면제권", category: "쿠폰", price: 600000, stock: 2 },
+    { id: uid(), name: "쉬는 시간 노래 신청", category: "특권", price: 100000, stock: null },
+  ] }));
+  say("예시 아이템 5개를 넣었어요.");
+}
+function fillSampleQuests() {
+  patch((d) => Object.assign({}, d, { quests: [
+    { id: uid(), title: "아침 독서 10분", reward: 10000, note: "1교시 시작 전", done: [], open: true },
+    { id: uid(), title: "우유갑 정리 당번", reward: 12000, note: "점심 후", done: [], open: true },
+    { id: uid(), title: "친구 도와주기", reward: 15000, note: "교사 확인 필요", done: [], open: true },
+  ] }));
+  say("예시 퀘스트 3개를 넣었어요.");
+}
+function fillSampleJobs() {
+  patch((d) => Object.assign({}, d, { jobs: [
+    { id: uid(), name: "환경미화원", salary: 2250000, duty: "교실 뒤편과 사물함 정리", holders: [] },
+    { id: uid(), name: "디바이스매니저", salary: 2350000, duty: "태블릿 충전과 수량 확인", holders: [] },
+    { id: uid(), name: "사서", salary: 2050000, duty: "학급문고 대출 기록", holders: [] },
+    { id: uid(), name: "청소관리자", salary: 2000000, duty: "청소 구역 점검", holders: [] },
+    { id: uid(), name: "은행원", salary: 2100000, duty: "친구들 예금 신청 도와주기", holders: [] },
+  ] }));
+  say("예시 직업 5개를 넣었어요.");
+}
+function paySalaries() {
+  const d = S.data;
+  let count = 0;
+  d.jobs.forEach((j) => {
+    const holders = j.holders.filter((id) => d.students.some((s) => s.id === id));
+    if (holders.length && j.salary > 0) { move(holders, j.salary, "급여 · " + j.name, "급여"); count += holders.length; }
+  });
+  say(count ? count + "명에게 급여를 보냈어요." : "급여를 받을 사람이 없어요.");
+}
+function paySalaryOne(j) {
+  const hs = j.holders.filter((id) => S.data.students.some((s) => s.id === id));
+  if (!hs.length) { say("배정된 학생이 없어요."); return; }
+  move(hs, j.salary, "급여 · " + j.name, "급여");
+  say(j.name + " " + hs.length + "명에게 급여를 보냈어요.");
+}
+function payInterest() {
+  const at = now();
+  const entries = [];
+  patch((d) => {
+    const ss = d.students.map((s) => {
+      const gain = Math.floor(((s.savings || 0) * (d.interestRate || 0)) / 100);
+      if (gain <= 0) return s;
+      entries.push({ id: uid(), at, kind: "이자", studentId: s.id, studentName: s.name, amount: gain, reason: "예금 이자 " + d.interestRate + "%" });
+      return Object.assign({}, s, { savings: s.savings + gain });
+    });
+    return Object.assign({}, d, { students: ss, log: [...entries, ...d.log].slice(0, 3000) });
+  });
+  say(entries.length ? "예금에 이자를 지급했어요." : "이자를 받을 예금이 없어요.");
+}
+
+/* ══════════════════════════════════════════════════════════
+   시작
+   ══════════════════════════════════════════════════════════ */
+async function boot() {
+  bindGlobalEvents();
+  render(); // 로딩 화면
+  const loaded = await store.load();
+  myStamp = loaded.stamp;
+  S.data = migrate(loaded.data);
+  S.ready = true;
+  render();
+
+  /* 공용 서버(Supabase) 모드일 때만: 다른 기기의 변경을 주기적으로 가져오기 */
+  if (store.mode === "server") {
+    setInterval(async () => {
+      if (saveTimer) return; // 저장 중이면 건너뜀
+      try {
+        const s = await store.stamp();
+        if (s && s !== myStamp) {
+          const loaded2 = await store.load();
+          if (loaded2.data) { myStamp = loaded2.stamp; S.data = migrate(loaded2.data); render(); }
+        }
+      } catch (e) { /* 네트워크 오류는 조용히 무시 */ }
+    }, 5000);
+  }
+}
+
+document.addEventListener("DOMContentLoaded", boot);
+</script>
+</body>
+</html>

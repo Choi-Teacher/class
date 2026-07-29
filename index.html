@@ -88,6 +88,31 @@ button{cursor:pointer;}
 .bs-badge-n{margin-left:auto;background:var(--red);color:#fff;border-radius:999px;font-size:11px;
   min-width:18px;height:18px;line-height:18px;text-align:center;padding:0 5px;font-weight:700;}
 
+/* ── 학생 화면 (사이드바형) ─────────────────────────────── */
+.bs-stu-side{position:sticky;top:76px;align-self:flex-start;display:flex;flex-direction:column;gap:14px;}
+.bs-stu-me{display:flex;align-items:center;gap:11px;background:var(--card);border:1px solid var(--line);
+  border-radius:16px;padding:13px;}
+.bs-stu-me .bs-av{width:52px;height:52px;flex-shrink:0;border-radius:14px;}
+.bs-stu-me-name{font-size:14.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bs-stu-me-cls{font-size:12px;color:var(--dim);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bs-stu-nav{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:8px;gap:3px;}
+.bs-stu-nav button{border-radius:12px;padding:12px 14px;font-size:15px;}
+.bs-stu-nav button[data-on="true"]{background:var(--ink);color:#fff;font-weight:700;}
+.bs-stu-nav button[data-on="true"]:hover{background:var(--ink);}
+.bs-stu-pw{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px;
+  font-size:13.5px;color:var(--dim);text-align:center;width:100%;}
+.bs-stu-pw:hover{background:var(--soft);color:var(--ink);}
+
+@media (max-width:760px){
+  .bs-stu-shell{flex-direction:column;gap:12px!important;}
+  .bs-stu-side{width:100%;position:static;flex-direction:column;}
+  .bs-stu-nav{flex-direction:row;overflow-x:auto;padding:6px;}
+  .bs-stu-nav button{flex-shrink:0;padding:10px 14px;}
+  .bs-stu-nav .bs-lbl{display:inline;}
+  .bs-stu-nav .bs-nav-ico{display:none;}
+  .bs-stu-pw{display:none;}
+}
+
 /* 카드 */
 .bs-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);}
 .bs-card-pad{padding:20px;}
@@ -135,6 +160,13 @@ button{cursor:pointer;}
 .bs-av{width:100%;aspect-ratio:1;border-radius:14px;display:grid;place-items:center;color:#fff;
   font-size:28px;font-weight:700;letter-spacing:-.02em;border:2.5px solid transparent;transition:border-color .12s;}
 .bs-stu[data-sel="true"] .bs-av{border-color:var(--ink);}
+.bs-av-emo{color:var(--ink);line-height:1;}
+.bs-gacha-current{width:110px;height:110px;border-radius:28px;display:grid;place-items:center;font-size:60px;
+  background:linear-gradient(135deg,#F3F4FA,#E9EBF6);border:1px solid var(--line);}
+.bs-gacha-box{background:linear-gradient(180deg,#FFFFFF,#FBFAFF);}
+.bs-gacha-pop{width:120px;height:120px;border-radius:30px;display:grid;place-items:center;font-size:66px;
+  background:linear-gradient(135deg,#FDF3E7,#F3EFFB);border:1px solid var(--line);animation:bs-gacha .5s cubic-bezier(.2,1.3,.4,1) both;}
+@keyframes bs-gacha{0%{opacity:0;transform:scale(.3) rotate(-18deg);}60%{transform:scale(1.12) rotate(6deg);}100%{opacity:1;transform:scale(1) rotate(0);}}
 .bs-stu-name{font-size:14px;font-weight:600;margin-top:8px;}
 .bs-stu-bal{font-size:12.5px;color:var(--dim);margin-top:2px;}
 .bs-tick{position:absolute;top:7px;right:7px;width:20px;height:20px;border-radius:50%;background:var(--ink);
@@ -296,7 +328,8 @@ const DEFAULT_DATA = {
   pin: "",
   storeMode: "instant",
   auth: { teacherId: "", teacherPw: "" },
-  perms: { store: true, stocks: true, bank: true, quests: true },
+  perms: { store: true, stocks: true, bank: true, quests: true, avatar: true },
+  gacha: { price: 50000 },
   students: [],
   items: [],
   quests: [],
@@ -319,6 +352,16 @@ const KINDS = ["지급", "차감", "구매", "퀘스트", "급여", "이자", "�
 const CATS = ["간식", "쿠폰", "특권", "학용품", "기타"];
 
 const AV = ["#F2A15C", "#5B8DEF", "#4FB980", "#B884E0", "#E4739B", "#E0B341", "#5FBCC8", "#A08A6B", "#7C86D6", "#D4785C"];
+
+/* 아바타 뽑기에서 나올 수 있는 이모지들 */
+const AVATAR_POOL = [
+  "🐶","🐱","🐭","🐹","🐰","🦊","🐻","🐼","🐨","🐯","🦁","🐮","🐷","🐸","🐵",
+  "🐔","🐧","🐦","🐤","🦉","🦄","🐴","🐝","🐢","🐙","🦕","🦖","🐳","🐬","🐠",
+  "🦋","🐞","🌵","🌻","🌸","🍄","🌈","⭐","🔥","💎","🍀","🌙","☀️","⚡","❄️",
+  "🍎","🍓","🍉","🍑","🍒","🍔","🍕","🍩","🍪","🎂","🍦","🧁","🍭","🎈","🎁",
+  "🎨","🎵","🎮","🚀","🛸","🏀","⚽","🎯","👑","🤖","👾","🦸","🧙","🐲","🦩",
+];
+function randomAvatar() { return AVATAR_POOL[Math.floor(Math.random() * AVATAR_POOL.length)]; }
 function avColor(seed) {
   let h = 0;
   seed = seed || "?";
@@ -333,8 +376,10 @@ function migrate(raw) {
   d.auth = Object.assign({ teacherId: "", teacherPw: "" }, d.auth || {});
   d.auth.teacherId = String(d.auth.teacherId || "").trim();
   d.auth.teacherPw = String(d.auth.teacherPw || "");
-  d.perms = Object.assign({ store: true, stocks: true, bank: true, quests: true }, d.perms || {});
-  ["store", "stocks", "bank", "quests"].forEach((k) => { d.perms[k] = d.perms[k] !== false; });
+  d.perms = Object.assign({ store: true, stocks: true, bank: true, quests: true, avatar: true }, d.perms || {});
+  ["store", "stocks", "bank", "quests", "avatar"].forEach((k) => { d.perms[k] = d.perms[k] !== false; });
+  d.gacha = Object.assign({ price: 50000 }, d.gacha || {});
+  d.gacha.price = Math.max(0, Math.round(Number(d.gacha.price) || 0));
 
   /* 주식 종목 정리 */
   d.stocks = (Array.isArray(d.stocks) ? d.stocks : []).map((s) => {
@@ -369,6 +414,8 @@ function migrate(raw) {
     base.loginId = String(base.loginId || "").trim();
     base.loginPw = String(base.loginPw || "");
     base.active = base.active !== false;
+    base.avatar = String(base.avatar || "");        // 학생이 뽑은 아바타 이모지 (없으면 이름 첫 글자)
+    base.pwChanged = base.pwChanged === true;        // 학생이 첫 접속 후 비번을 바꿨는지
     return base;
   });
 
@@ -518,13 +565,18 @@ function move(ids, delta, why, kind) {
 }
 
 /* ── 작은 UI 조각들 ───────────────────────────────────── */
-function Avatar(name, size) {
-  const ch = (name || "?").trim().charAt(0) || "?";
+function Avatar(name, size, avatar) {
+  const hasEmoji = !!(avatar && String(avatar).trim());
+  const ch = hasEmoji ? String(avatar).trim() : ((name || "?").trim().charAt(0) || "?");
+  const bg = hasEmoji ? "linear-gradient(135deg,#F3F4FA,#E9EBF6)" : avColor(name || "?");
+  const fs = size ? Math.round(size * (hasEmoji ? 0.58 : 0.42)) : (hasEmoji ? 24 : 18);
   const style = size
-    ? 'background:' + avColor(name || "?") + ';font-size:' + Math.round(size * 0.42) + 'px;width:' + size + 'px;height:' + size + 'px;aspect-ratio:auto;'
-    : 'background:' + avColor(name || "?") + ';';
-  return '<div class="bs-av" style="' + style + '">' + escapeHtml(ch) + '</div>';
+    ? 'background:' + bg + ';font-size:' + fs + 'px;width:' + size + 'px;height:' + size + 'px;aspect-ratio:auto;'
+    : 'background:' + bg + ';font-size:' + fs + 'px;';
+  return '<div class="bs-av' + (hasEmoji ? ' bs-av-emo' : '') + '" style="' + style + '">' + escapeHtml(ch) + '</div>';
 }
+/* 학생 객체에서 아바타를 그릴 때 쓰는 도우미 */
+function AvatarOf(s, size) { return Avatar(s ? s.name : "?", size, s ? s.avatar : ""); }
 function Coin(n) {
   return '<span class="bs-num"><i class="bs-coin"></i>' + fmt(n) + '</span>';
 }
@@ -790,6 +842,7 @@ function tryLogin(id, pw) {
   S.session = { role: "student", studentId: st.id };
   S.loginError = ""; S.studentPage = "wallet"; storeSession(S.session);
   render(); say(st.name + "님, 반가워요.");
+  if (!st.pwChanged) { setTimeout(() => openStudentPwModal(true), 350); }   // 첫 접속이면 비번 바꾸기 안내
 }
 
 /* ══════════ 학생 추가 모달 ══════════ */
@@ -820,10 +873,18 @@ function openAddStudentsModal() {
       if (!names.length) return;
       patch((d) => {
         let no = d.students.reduce((m, s) => Math.max(m, s.no), 0);
-        const added = names.map((n) => ({ id: uid(), no: ++no, name: n, balance: 0, savings: 0, memo: "" }));
+        const taken = new Set();
+        d.students.forEach((s) => { if (s.loginId) taken.add(s.loginId.toLowerCase()); });
+        if (d.auth.teacherId) taken.add(d.auth.teacherId.toLowerCase());
+        const added = names.map((n) => {
+          const loginId = uniqueLoginId(n, taken);   // 아이디는 이름 그대로 (겹치면 뒤에 숫자)
+          taken.add(loginId.toLowerCase());
+          return { id: uid(), no: ++no, name: n, balance: 0, savings: 0, memo: "",
+            loginId: loginId, loginPw: randomPw(), active: true, avatar: "", pwChanged: false };
+        });
         return Object.assign({}, d, { students: [...d.students, ...added] });
       });
-      closeModal(); say(names.length + "명을 추가했어요.");
+      closeModal(); say(names.length + "명을 추가하고 계정도 만들었어요.");
     }
   });
 }
@@ -1583,7 +1644,7 @@ function renderHomePage() {
     students.forEach((s) => {
       const job = jobs.find((j) => j.holders.includes(s.id));
       html += '<button type="button" class="bs-stu" data-id="' + s.id + '" data-sel="' + S.sel.includes(s.id) + '">' +
-        Avatar(s.name) +
+        AvatarOf(s) +
         (S.sel.includes(s.id) ? '<span class="bs-tick">✓</span>' : '') +
         '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div>' +
         '<div class="bs-stu-bal">' + fmt(s.balance) + (job ? ' · ' + escapeHtml(job.name) : '') + '</div>' +
@@ -1747,7 +1808,7 @@ function renderFinancePage() {
       '<thead><tr><th>학생</th><th class="bs-r">쓸 수 있는 돈</th><th class="bs-r">예금</th><th class="bs-r">주식</th><th class="bs-r">합계</th></tr></thead><tbody>';
     students.forEach((s) => {
       const sv = stockAssetOf(s).val;
-      html += '<tr><td><span class="flex items-center gap-2">' + Avatar(s.name, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
+      html += '<tr><td><span class="flex items-center gap-2">' + AvatarOf(s, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
         '<td class="bs-r">' + Coin(s.balance) + '</td>' +
         '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(s.savings || 0) + '</td>' +
         '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(sv) + '</td>' +
@@ -1940,7 +2001,7 @@ function renderStocksPage() {
           escapeHtml(st.name) + ' <b class="bs-num">' + s.holdings[id].shares + '주</b></span>';
       }).join("");
       html += '<tr>' +
-        '<td><span class="flex items-center gap-2">' + Avatar(s.name, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
+        '<td><span class="flex items-center gap-2">' + AvatarOf(s, 28) + '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
         '<td><span class="flex gap-2 flex-wrap">' + tags + '</span></td>' +
         '<td class="bs-r bs-num" style="color:var(--dim);">' + fmt(a.cost) + '</td>' +
         '<td class="bs-r bs-num" style="font-weight:700;">' + fmt(a.val) + '</td>' +
@@ -1962,6 +2023,14 @@ function loginIdTaken(id, exceptStudentId) {
   return d.students.some((s) => s.id !== exceptStudentId && s.loginId && s.loginId.toLowerCase() === low);
 }
 function randomPw() { return String(Math.floor(1000 + Math.random() * 9000)); }
+/* 이름을 로그인 아이디로. 띄어쓰기는 없애고, 겹치면 뒤에 숫자를 붙임 */
+function uniqueLoginId(name, taken) {
+  let base = String(name || "").trim().replace(/\s+/g, "");
+  if (!base) base = "student";
+  let candidate = base, n = 1;
+  while (taken.has(candidate.toLowerCase())) { candidate = base + (++n); }
+  return candidate;
+}
 
 function renderAccountsPage() {
   const d = S.data;
@@ -1991,7 +2060,7 @@ function renderAccountsPage() {
       : S.showPw ? '<span class="bs-num">' + escapeHtml(s.loginPw) + '</span>'
       : '<span class="bs-num" style="letter-spacing:.2em;">••••</span>';
     html += '<tr>' +
-      '<td><span class="flex items-center gap-2">' + Avatar(s.name, 28) +
+      '<td><span class="flex items-center gap-2">' + AvatarOf(s, 28) +
         '<span style="font-weight:600;">' + s.no + '. ' + escapeHtml(s.name) + '</span></span></td>' +
       '<td>' + (s.loginId ? '<span class="bs-num">' + escapeHtml(s.loginId) + '</span>'
         : '<span style="color:var(--mute);font-size:13px;">없음</span>') + '</td>' +
@@ -2017,7 +2086,7 @@ function openAccountModal(student) {
   let active = student.active;
 
   const body =
-    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + Avatar(student.name, 34) +
+    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + AvatarOf(student, 34) +
       '<div><div style="font-weight:700;">' + student.no + '. ' + escapeHtml(student.name) + '</div>' +
       '<div style="font-size:12.5px;color:var(--dim);">이 학생이 쓸 계정이에요</div></div></div>' +
     '<label class="bs-lab">아이디</label>' +
@@ -2082,15 +2151,17 @@ function openAccountModal(student) {
 /* 계정 자동 생성 */
 function generateAccounts() {
   let made = 0;
+  const taken = new Set();
+  S.data.students.forEach((s) => { if (s.loginId) taken.add(s.loginId.toLowerCase()); });
+  if (S.data.auth.teacherId) taken.add(S.data.auth.teacherId.toLowerCase());
   patch((d) => ({
     ...d,
     students: d.students.map((s) => {
       if (s.loginId) return s;                       // 이미 있는 계정은 건드리지 않음
-      let base = "s" + String(s.no).padStart(2, "0");
-      let candidate = base, n = 1;
-      while (loginIdTaken(candidate, s.id)) { candidate = base + "-" + (++n); }
+      const candidate = uniqueLoginId(s.name, taken);   // 아이디는 이름 그대로
+      taken.add(candidate.toLowerCase());
       made++;
-      return Object.assign({}, s, { loginId: candidate, loginPw: randomPw(), active: true });
+      return Object.assign({}, s, { loginId: candidate, loginPw: randomPw(), active: true, pwChanged: false });
     }),
   }));
   say(made ? made + "명의 계정을 만들었어요." : "이미 모두 계정이 있어요.");
@@ -2127,6 +2198,13 @@ function renderSettingsPage() {
   '</div>';
 
   html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">아바타 뽑기</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">학생이 아바타를 한 번 뽑을 때 드는 포인트예요. 0으로 두면 공짜로 뽑아요.</p>' +
+    '<label class="bs-lab" style="margin-top:14px;">뽑기 가격</label>' +
+    '<input class="bs-in bs-num" id="set-gacha-price" type="number" min="0" value="' + (Number(d.gacha.price) || 0) + '">' +
+  '</div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">상점 구매 방식</div>' +
     '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">학생이 아이템을 살 때 선생님 승인을 거칠지 정해요.</p>' +
     '<div class="flex gap-2 mt-3 flex-wrap">' +
@@ -2146,7 +2224,7 @@ function renderSettingsPage() {
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생에게 허용할 기능</div>' +
     '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">끄면 학생 화면에서 그 메뉴가 사라져요.</p>' +
     '<div class="flex gap-2 mt-3 flex-wrap">' +
-      [["store", "상점 구매"], ["stocks", "주식 거래"], ["bank", "예금·출금"], ["quests", "퀘스트 신청"]].map((p) =>
+      [["store", "상점 구매"], ["stocks", "주식 거래"], ["bank", "예금·출금"], ["quests", "퀘스트 신청"], ["avatar", "아바타 뽑기"]].map((p) =>
         '<button type="button" class="bs-chip" data-perm="' + p[0] + '" data-on="' + d.perms[p[0]] + '">' + p[1] + '</button>').join("") +
     '</div></div>';
 
@@ -2189,7 +2267,7 @@ function studentAppHtml() {
       '</div>';
     html += !d.students.length ? Empty("아직 명단이 없어요.")
       : '<div class="grid gap-x-4 gap-y-6" style="grid-template-columns:repeat(auto-fill, minmax(92px, 1fr));">' +
-        d.students.map((s) => '<button type="button" class="bs-stu" data-pick="' + s.id + '">' + Avatar(s.name) +
+        d.students.map((s) => '<button type="button" class="bs-stu" data-pick="' + s.id + '">' + AvatarOf(s) +
           '<div class="bs-stu-name">' + s.no + '. ' + escapeHtml(s.name) + '</div></button>').join("") + '</div>';
     return html + '</div></div>';
   }
@@ -2202,11 +2280,12 @@ function studentAppHtml() {
   const waiting = (type, refId) => requests.some((r) => r.studentId === me.id && r.type === type && r.refId === refId && r.status === "대기");
 
   /* 선생님이 허용한 메뉴만 */
-  const NAV = [["wallet", "내 계좌"], ["activity", "활동 기록"]]
-    .concat(perms.quests ? [["quest", "퀘스트"]] : [])
-    .concat(perms.store ? [["store", "상점"]] : [])
-    .concat(perms.stocks ? [["stocks", "주식"]] : [])
-    .concat([["tt", "시간표"]]);
+  const NAV = [["wallet", "내 계좌", "◈"], ["activity", "활동 기록", "▤"]]
+    .concat(perms.quests ? [["quest", "퀘스트", "❏"]] : [])
+    .concat(perms.store ? [["store", "상점", "▦"]] : [])
+    .concat(perms.avatar ? [["avatar", "아바타 뽑기", "🎁"]] : [])
+    .concat(perms.stocks ? [["stocks", "주식", "◇"]] : [])
+    .concat([["tt", "시간표", "▥"]]);
   if (!NAV.some((n) => n[0] === S.studentPage)) S.studentPage = "wallet";
 
   const total = me.balance + (me.savings || 0);
@@ -2217,21 +2296,37 @@ function studentAppHtml() {
     html += '<div style="background:var(--orange-bg);color:var(--orange);font-size:13.5px;font-weight:600;' +
       'padding:9px 16px;text-align:center;">선생님 미리보기 중 · 실제 학생에게는 이 띠가 보이지 않아요</div>';
   }
-  html += '<div class="bs-top">' +
-      '<div class="mx-auto px-5 py-3 flex items-center justify-between gap-3" style="max-width:900px;">' +
-        '<div class="flex items-center gap-3">' + Avatar(me.name, 36) +
-        '<div><div style="font-weight:700;font-size:15px;">' + me.no + '. ' + escapeHtml(me.name) + '</div>' +
-        '<div style="font-size:12.5px;color:var(--dim);">' + escapeHtml(d.className) + '</div></div></div>' +
+
+  /* ── 상단 바 (브랜드 + 학생 정보 + 로그아웃) ── */
+  html += '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-3" style="max-width:1080px;">' +
+      '<div class="bs-mark">Choi<span>\'s</span></div>' +
+      '<div class="flex items-center gap-2">' +
         (previewing
-          ? '<div class="flex gap-2"><button type="button" class="bs-pill" id="preview-pick">다른 학생</button>' +
-            '<button type="button" class="bs-pill" id="preview-exit">미리보기 끝내기</button></div>'
+          ? '<button type="button" class="bs-pill" id="preview-pick">다른 학생</button>' +
+            '<button type="button" class="bs-pill" id="preview-exit">미리보기 끝내기</button>'
           : '<button type="button" class="bs-pill" id="stu-logout">로그아웃</button>') +
       '</div>' +
-      '<div class="mx-auto px-5 pb-3 flex gap-2 overflow-x-auto" style="max-width:900px;">' +
-        NAV.map((n) => '<button type="button" class="bs-chip" data-stupage="' + n[0] + '" data-on="' + (S.studentPage === n[0]) + '">' + n[1] + '</button>').join("") +
-      '</div>' +
+    '</div></div>';
+
+  /* ── 본문: 왼쪽 사이드바 + 오른쪽 내용 ── */
+  html += '<div class="bs-shell bs-stu-shell mx-auto flex gap-7 px-5 py-7" style="max-width:1080px;">';
+
+  /* 사이드바 */
+  html += '<aside class="bs-side bs-stu-side">' +
+    '<div class="bs-stu-me">' + AvatarOf(me, 52) +
+      '<div class="min-w-0"><div class="bs-stu-me-name">' + me.no + '. ' + escapeHtml(me.name) + '</div>' +
+      '<div class="bs-stu-me-cls">' + escapeHtml(d.className) + '</div></div>' +
     '</div>' +
-    '<div class="mx-auto px-5 py-6" style="max-width:900px;">';
+    '<nav class="bs-nav bs-stu-nav">' +
+      NAV.map((n) => '<button type="button" data-stupage="' + n[0] + '" data-on="' + (S.studentPage === n[0]) + '">' +
+        '<span class="bs-nav-ico">' + (n[2] || "•") + '</span><span class="bs-lbl">' + n[1] + '</span></button>').join("") +
+    '</nav>' +
+    (previewing ? '' :
+      '<button type="button" class="bs-stu-pw" id="stu-pwchange">🔒 비밀번호 바꾸기</button>') +
+  '</aside>';
+
+  /* 내용 */
+  html += '<main class="bs-stu-main" style="flex:1;min-width:0;">';
 
   if (S.studentPage === "wallet") {
     html += '<div class="grid gap-4"><div class="bs-card bs-card-pad">' +
@@ -2304,12 +2399,115 @@ function studentAppHtml() {
     }
   }
 
+  if (S.studentPage === "avatar") html += studentAvatarHtml(me);
   if (S.studentPage === "activity") html += studentActivityHtml(me);
   if (S.studentPage === "stocks") html += studentStocksHtml(me);
   if (S.studentPage === "tt") html += timetableHtml(true);
 
-  html += '</div></div>';
+  html += '</main></div></div>';
   return html;
+}
+
+/* ══════════ 학생 모드 — 비밀번호 바꾸기 ══════════ */
+function openStudentPwModal(firstTime) {
+  const me = S.data.students.find((s) => s.id === currentStudentId());
+  if (!me) return;
+  let pw = "", pw2 = "";
+  const body =
+    (firstTime
+      ? '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">처음 접속했어요! 나만 아는 비밀번호로 바꿔 주세요. ' +
+        '(그냥 두고 싶으면 «나중에»를 눌러도 돼요.)</p>'
+      : '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">새 비밀번호를 정해 주세요.</p>') +
+    '<label class="bs-lab" style="margin-top:14px;">새 비밀번호</label>' +
+    '<input class="bs-in" id="spw-1" type="password" autocomplete="new-password" placeholder="4자 이상">' +
+    '<label class="bs-lab" style="margin-top:14px;">새 비밀번호 확인</label>' +
+    '<input class="bs-in" id="spw-2" type="password" autocomplete="new-password">' +
+    '<div id="spw-err" style="font-size:13px;color:var(--red);margin-top:10px;min-height:18px;"></div>' +
+    '<div class="flex justify-end gap-2 mt-4">' +
+      (firstTime ? '<button type="button" class="bs-btn bs-btn-2" id="spw-later">나중에</button>' : '<button type="button" class="bs-btn bs-btn-2" id="spw-cancel">취소</button>') +
+      '<button type="button" class="bs-btn" id="spw-save">바꾸기</button>' +
+    '</div>';
+  const root = showModal("비밀번호 바꾸기", body, {});
+  const err = (m) => { $("#spw-err", root).textContent = m || ""; };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "spw-1") pw = e.target.value;
+    if (e.target.id === "spw-2") pw2 = e.target.value;
+    err("");
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "spw-cancel") { closeModal(); return; }
+    if (t.id === "spw-later") {
+      /* 다시 묻지 않도록 표시만 남김 (비번은 그대로) */
+      patch((d) => Object.assign({}, d, { students: d.students.map((s) => s.id === me.id ? Object.assign({}, s, { pwChanged: true }) : s) }));
+      closeModal(); return;
+    }
+    if (t.id === "spw-save") {
+      if (pw.length < 4) { err("비밀번호는 4자 이상으로 해 주세요."); return; }
+      if (pw !== pw2) { err("두 비밀번호가 서로 달라요."); return; }
+      patch((d) => Object.assign({}, d, { students: d.students.map((s) => s.id === me.id ? Object.assign({}, s, { loginPw: pw, pwChanged: true }) : s) }));
+      closeModal(); say("비밀번호를 바꿨어요.");
+    }
+  });
+}
+
+/* ══════════ 학생 모드 — 아바타 뽑기 ══════════ */
+function studentAvatarHtml(me) {
+  const d = S.data;
+  const price = Math.max(0, Number(d.gacha.price) || 0);
+  const poor = me.balance < price;
+  const cur = me.avatar ? me.avatar : (me.name || "?").trim().charAt(0);
+
+  let html = '<div class="grid gap-4">';
+
+  /* 현재 아바타 카드 */
+  html += '<div class="bs-card bs-card-pad text-center">' +
+    '<div style="font-size:13.5px;color:var(--dim);">지금 내 아바타</div>' +
+    '<div class="bs-gacha-current mx-auto mt-4">' + escapeHtml(cur) + '</div>' +
+    '<div style="font-weight:700;font-size:17px;margin-top:14px;">' + me.no + '. ' + escapeHtml(me.name) + '</div>' +
+    (me.avatar ? '' : '<div style="font-size:13px;color:var(--dim);margin-top:4px;">아직 뽑은 아바타가 없어요</div>') +
+  '</div>';
+
+  /* 뽑기 카드 */
+  html += '<div class="bs-card bs-card-pad text-center bs-gacha-box">' +
+    '<div style="font-size:44px;line-height:1;">🎁</div>' +
+    '<div style="font-size:17px;font-weight:800;letter-spacing:-.02em;margin-top:10px;">아바타 뽑기</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;margin-top:6px;">' +
+      '포인트를 내면 무작위 아바타가 나와요.<br>마음에 안 들면 다시 뽑을 수도 있어요.</p>' +
+    '<div class="mt-4" style="font-size:15px;">뽑기 한 번 · <b>' + Coin(price) + '</b></div>' +
+    '<button type="button" class="bs-btn" id="stu-gacha-draw" style="margin-top:16px;min-width:180px;" ' +
+      (poor ? 'disabled' : '') + '>' +
+      (poor ? "포인트가 부족해요" : "뽑기!") + '</button>' +
+    '<div style="font-size:12.5px;color:var(--dim);margin-top:12px;">내 포인트 ' + fmt(me.balance) + '</div>' +
+  '</div>';
+
+  html += '</div>';
+  return html;
+}
+
+/* 뽑기 결과 애니메이션 모달 */
+function openGachaResultModal(emoji) {
+  const me = S.data.students.find((s) => s.id === currentStudentId());
+  const body =
+    '<div class="py-6 text-center">' +
+      '<div style="font-size:13.5px;color:var(--dim);">새 아바타가 나왔어요!</div>' +
+      '<div class="bs-gacha-pop mx-auto" style="margin-top:18px;">' + escapeHtml(emoji) + '</div>' +
+      '<div style="font-weight:700;font-size:17px;margin-top:18px;">' + (me ? escapeHtml(me.name) : "") + '</div>' +
+    '</div>' +
+    '<div class="flex gap-2 justify-center">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="gacha-again">다시 뽑기</button>' +
+      '<button type="button" class="bs-btn" id="gacha-keep">이걸로 할래요</button>' +
+    '</div>';
+  const root = showModal("아바타 뽑기", body, {});
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "gacha-keep") { closeModal(); say("아바타를 정했어요!"); render(); return; }
+    if (t.id === "gacha-again") {
+      const got = studentDrawAvatar();
+      if (got) openGachaResultModal(got);   // 새 모달로 교체
+      return;
+    }
+  });
 }
 
 /* ══════════ 학생 모드 — 주식 ══════════ */
@@ -2569,6 +2767,8 @@ function bindGlobalEvents() {
       studentBank(t.id === "stu-bank-in" ? "in" : "out", amt);
       return;
     }
+    if (t.id === "stu-gacha-draw") { const got = studentDrawAvatar(); if (got) openGachaResultModal(got); return; }
+    if (t.id === "stu-pwchange") { openStudentPwModal(false); return; }
     const questAsk = t.getAttribute("data-quest-ask");
     if (questAsk) { studentAsk("퀘스트", questAsk, (S.data.quests.find((q) => q.id === questAsk) || {}).title || ""); return; }
     const storeBuy = t.getAttribute("data-store-buy");
@@ -2703,6 +2903,7 @@ function bindGlobalEvents() {
     /* 설정 입력들 (조용히 반영) */
     if (t.id === "set-classname") { patchQuiet((d) => Object.assign({}, d, { className: t.value })); return; }
     if (t.id === "set-currency") { patchQuiet((d) => Object.assign({}, d, { currency: t.value })); return; }
+    if (t.id === "set-gacha-price") { const v = Math.max(0, Math.round(Number(t.value) || 0)); patchQuiet((d) => Object.assign({}, d, { gacha: Object.assign({}, d.gacha, { price: v }) })); return; }
 
     /* 재테크 이자율 (조용히 반영 + 큰 숫자만 즉시 갱신) */
     if (t.id === "fin-rate") {
@@ -2840,6 +3041,27 @@ function studentBank(dir, amt) {
     log: [{ id: uid(), at, kind: dir === "in" ? "입금" : "출금", studentId: me.id, studentName: me.name, amount: dir === "in" ? -real : real, reason: dir === "in" ? "예금 입금" : "예금 출금" }, ...dd.log].slice(0, 3000),
   }));
   say(dir === "in" ? fmt(real) + " 예금했어요." : fmt(real) + " 출금했어요.");
+}
+
+/* ── 아바타 뽑기 ── */
+function studentDrawAvatar() {
+  const d = S.data;
+  if (S.preview && isTeacher()) { say("미리보기 중에는 뽑을 수 없어요."); return null; }
+  if (!d.perms.avatar) { say("지금은 아바타 뽑기를 선생님이 잠가 두셨어요."); return null; }
+  const me = d.students.find((s) => s.id === currentStudentId());
+  if (!me) return null;
+  const price = Math.max(0, Number(d.gacha.price) || 0);
+  if (me.balance < price) { say("포인트가 부족해요. (뽑기 " + fmt(price) + ")"); return null; }
+  const got = randomAvatar();
+  const at = now();
+  patch((dd) => Object.assign({}, dd, {
+    students: dd.students.map((s) => s.id !== me.id ? s
+      : Object.assign({}, s, { balance: s.balance - price, avatar: got })),
+    log: price > 0
+      ? [{ id: uid(), at, kind: "구매", studentId: me.id, studentName: me.name, amount: -price, reason: "아바타 뽑기" }, ...dd.log].slice(0, 3000)
+      : dd.log,
+  }));
+  return got;
 }
 
 /* ── 교사 모드 동작 함수들 ── */

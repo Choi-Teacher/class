@@ -233,6 +233,16 @@ button{cursor:pointer;}
 .bs-mkt{display:inline-flex;align-items:center;gap:7px;font-size:13.5px;font-weight:600;}
 .bs-dot{width:8px;height:8px;border-radius:50%;display:inline-block;}
 
+/* 학급 고르기 · 관리자 화면 */
+.bs-clscard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:19px 20px;
+  text-align:left;width:100%;display:block;}
+.bs-clscard:hover{border-color:var(--ink);}
+.bs-link{background:none;border:0;padding:0;color:var(--dim);font-size:13.5px;font-weight:600;
+  text-decoration:underline;text-underline-offset:3px;}
+.bs-link:hover{color:var(--ink);}
+.bs-note{background:var(--orange-bg);color:var(--orange);font-size:13.5px;font-weight:600;
+  padding:9px 16px;text-align:center;}
+
 @media (prefers-reduced-motion:reduce){.bs *{animation-duration:.001s!important;transition:none!important;}}
 </style>
 </head>
@@ -252,36 +262,66 @@ button{cursor:pointer;}
 const CONFIG = {
   supabaseUrl: "https://jmwbacxjnniaeqpnihpb.supabase.co",   // 예: "https://abcdefgh.supabase.co"
   supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imptd2JhY3hqbm5pYWVxcG5paHBiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU1MTc1ODgsImV4cCI6MjEwMTA5MzU4OH0.GTjBy3T6FOkGq7OyO4DkBWn_pYBhbHq8AdBlQZ6psBw",   // Project API keys 의 anon public 키
-  rowId: "main",     // 한 계정으로 여러 학급을 쓸 때만 바꾸세요
+  rowId: "main",     // 이 도구를 처음 쓸 때 만들어진 학급 칸 (그대로 두세요)
 };
 
 const KEY = "choisclass:v1";
 const SESSION_KEY = "choisclass:session";
 
+/* 여러 선생님 · 여러 학급 구조
+     "_directory"  관리자 · 선생님 목록 · 학급 목록이 담기는 칸
+     "class_XXXX"  학급 하나하나의 데이터가 담기는 칸
+     CONFIG.rowId  예전부터 쓰던 학급 (그대로 이어서 씁니다)            */
+const DIR_ROW = "_directory";
+
 /* ─────────────────────────────────────────────────────────────
-   ⚠ 선생님 비밀번호를 잊었을 때만 쓰세요.
+   ⚠ 관리자 비밀번호를 잊었을 때만 쓰세요.
    아래를 true 로 바꿔 저장하고 사이트를 한 번 연 뒤, 다시 false 로 되돌리세요.
-   학급 데이터는 지워지지 않고 «선생님 계정 만들기» 화면만 다시 나옵니다.
+   관리자 계정만 처음 값(최민규 / 2868)으로 돌아가고,
+   선생님·학급 데이터는 하나도 지워지지 않습니다.
    ───────────────────────────────────────────────────────────── */
-const RESET_TEACHER_ACCOUNT = false;
+const RESET_ADMIN = false;
+
+/* 최고 관리자의 처음 계정. 비밀번호는 알아볼 수 없게 바꿔 적어 둡니다.
+   로그인한 뒤 «관리자 설정»에서 언제든 바꿀 수 있어요. */
+const ADMIN_BOOT = { id: "최민규", pw: "h1:iafg8s-1f2vldo" };
 
 const DAYS = ["월", "화", "수", "목", "금"];
 const SB = CONFIG.supabaseUrl && CONFIG.supabaseKey ? CONFIG : null;
-const ROW = CONFIG.rowId || "main";
+const ROW = CONFIG.rowId || "main";       // 예전부터 쓰던 학급 칸
+
+/* 비밀번호는 되돌릴 수 없게 바꿔서 저장해요.
+   예전 방식으로 그냥 저장돼 있던 비밀번호도 그대로 받아 줍니다. */
+function hashPw(pw) {
+  const s = "choisclass!" + String(pw == null ? "" : pw);
+  let a = 0x811c9dc5, b = 0x1000193;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    a = Math.imul(a ^ c, 16777619) >>> 0;
+    b = Math.imul(b + c, 2654435761 + i) >>> 0;
+  }
+  return "h1:" + a.toString(36) + "-" + b.toString(36);
+}
+function pwMatch(input, stored) {
+  const st = String(stored == null ? "" : stored);
+  if (!st) return false;
+  if (st.slice(0, 3) === "h1:") return hashPw(input) === st;
+  return String(input == null ? "" : input) === st;
+}
 
 /* ── 저장소 ───────────────────────────────────────────── */
 const sbHeaders = SB
   ? { apikey: SB.supabaseKey, Authorization: "Bearer " + SB.supabaseKey, "Content-Type": "application/json" }
   : null;
 
-async function sbRead() {
-  const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?id=eq." + ROW + "&select=data,updated_at", { headers: sbHeaders });
+async function sbRead(row) {
+  const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?id=eq." + encodeURIComponent(row) + "&select=data,updated_at", { headers: sbHeaders });
   if (!r.ok) throw new Error("read failed");
   const rows = await r.json();
   return rows[0] || null;
 }
-async function sbWrite(data) {
-  const body = JSON.stringify({ id: ROW, data, updated_at: new Date().toISOString() });
+async function sbWrite(row, data) {
+  const body = JSON.stringify({ id: row, data, updated_at: new Date().toISOString() });
   const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?on_conflict=id", {
     method: "POST",
     headers: Object.assign({}, sbHeaders, { Prefer: "resolution=merge-duplicates" }),
@@ -289,33 +329,47 @@ async function sbWrite(data) {
   });
   if (!r.ok) throw new Error("write failed");
 }
+async function sbDelete(row) {
+  const r = await fetch(SB.supabaseUrl + "/rest/v1/class_state?id=eq." + encodeURIComponent(row), { method: "DELETE", headers: sbHeaders });
+  if (!r.ok) throw new Error("delete failed");
+}
+
+/* 브라우저에만 저장할 때 쓰는 칸 이름 (예전 학급은 예전 열쇠를 그대로) */
+function lsKey(row) { return row === ROW ? KEY : KEY + ":" + row; }
 
 const store = {
   mode: SB ? "server" : "local",
-  async load() {
+  async load(row) {
     try {
       if (this.mode === "server") {
-        const row = await sbRead();
-        return { data: row ? row.data : null, stamp: row ? row.updated_at : 0 };
+        const got = await sbRead(row);
+        return { data: got ? got.data : null, stamp: got ? got.updated_at : 0 };
       }
-      const raw = window.localStorage.getItem(KEY);
+      const raw = window.localStorage.getItem(lsKey(row));
       return { data: raw ? JSON.parse(raw) : null, stamp: 0 };
     } catch (e) {
       return { data: null, stamp: 0 };
     }
   },
-  async save(data) {
+  async save(row, data) {
     try {
-      if (this.mode === "server") { await sbWrite(data); return true; }
-      window.localStorage.setItem(KEY, JSON.stringify(data));
+      if (this.mode === "server") { await sbWrite(row, data); return true; }
+      window.localStorage.setItem(lsKey(row), JSON.stringify(data));
       return true;
     } catch (e) {
       return false;
     }
   },
-  async stamp() {
+  async remove(row) {
+    try {
+      if (this.mode === "server") { await sbDelete(row); return true; }
+      window.localStorage.removeItem(lsKey(row));
+      return true;
+    } catch (e) { return false; }
+  },
+  async stamp(row) {
     if (this.mode !== "server") return 0;
-    try { const row = await sbRead(); return row ? row.updated_at : 0; } catch (e) { return 0; }
+    try { const got = await sbRead(row); return got ? got.updated_at : 0; } catch (e) { return 0; }
   },
 };
 
@@ -438,12 +492,114 @@ function escapeHtml(s) {
 }
 
 /* ══════════════════════════════════════════════════════════
+   선생님 · 학급 명부  (DIR_ROW 칸에 저장)
+   ══════════════════════════════════════════════════════════ */
+const DEFAULT_DIR = {
+  version: 1,
+  admin: { id: "", pw: "" },
+  teachers: [],      // { id, loginId, loginPw, name, school, contact, status, memo, createdAt, decidedAt, classes:[] }
+  index: {},         // 학생 아이디(소문자) → 그 학생이 속한 학급 칸
+  signupOpen: true,  // 선생님 가입 신청 받기
+};
+const T_STATUS = ["pending", "approved", "rejected", "suspended"];
+const STATUS_LABEL = { pending: "승인 대기", approved: "사용 중", rejected: "거절", suspended: "정지" };
+const STATUS_CLASS = { pending: "bs-b-orange", approved: "bs-b-green", rejected: "bs-b-gray", suspended: "bs-b-red" };
+
+function migrateDir(raw) {
+  const x = Object.assign({}, DEFAULT_DIR, raw || {});
+  x.admin = Object.assign({ id: "", pw: "" }, x.admin || {});
+  if (!String(x.admin.id || "").trim()) { x.admin = { id: ADMIN_BOOT.id, pw: ADMIN_BOOT.pw }; }
+  x.teachers = (Array.isArray(x.teachers) ? x.teachers : []).map((t) => ({
+    id: t.id || uid(),
+    loginId: String(t.loginId || "").trim(),
+    loginPw: String(t.loginPw || ""),
+    name: String(t.name || ""),
+    school: String(t.school || ""),
+    contact: String(t.contact || ""),
+    status: T_STATUS.indexOf(t.status) >= 0 ? t.status : "pending",
+    memo: String(t.memo || ""),
+    createdAt: Number(t.createdAt) || 0,
+    decidedAt: Number(t.decidedAt) || 0,
+    classes: (Array.isArray(t.classes) ? t.classes : []).map((c) => ({
+      id: c.id || uid(),
+      name: String(c.name || "우리 반"),
+      row: String(c.row || ""),
+      createdAt: Number(c.createdAt) || 0,
+      students: Math.max(0, Number(c.students) || 0),
+    })).filter((c) => c.row),
+  })).filter((t) => t.loginId);
+  x.index = x.index && typeof x.index === "object" ? x.index : {};
+  x.signupOpen = x.signupOpen !== false;
+  return x;
+}
+
+const newClassRow = () => "class_" + uid() + uid().slice(0, 4);
+
+function findTeacher(tid) { return (S.dir ? S.dir.teachers : []).find((t) => t.id === tid) || null; }
+function myTeacher() { return S.session && S.session.role === "teacher" ? findTeacher(S.session.tid) : null; }
+function allClasses() {
+  const out = [];
+  (S.dir ? S.dir.teachers : []).forEach((t) => t.classes.forEach((c) => out.push({ cls: c, teacher: t })));
+  return out;
+}
+function classByRow(row) { return allClasses().find((x) => x.cls.row === row) || null; }
+
+/* 아이디가 이미 쓰이고 있는지 (관리자 · 선생님 · 다른 학급 학생까지 통틀어) */
+function idUsedInDir(low, exceptTeacherId) {
+  const dir = S.dir;
+  if (!dir || !low) return false;
+  if (String(dir.admin.id || "").toLowerCase() === low) return true;
+  if (dir.teachers.some((t) => t.id !== exceptTeacherId && t.loginId.toLowerCase() === low)) return true;
+  return Object.prototype.hasOwnProperty.call(dir.index, low);
+}
+/* 새 학생 아이디를 만들 때 피해야 할 아이디 모음 */
+function takenIdSet() {
+  const taken = new Set();
+  const dir = S.dir;
+  if (dir) {
+    if (dir.admin.id) taken.add(String(dir.admin.id).toLowerCase());
+    dir.teachers.forEach((t) => taken.add(t.loginId.toLowerCase()));
+    Object.keys(dir.index).forEach((k) => taken.add(k));
+  }
+  if (S.data) S.data.students.forEach((s) => { if (s.loginId) taken.add(s.loginId.toLowerCase()); });
+  return taken;
+}
+
+/* 명부를 고쳐 쓸 때는 언제나 «서버에서 다시 읽고 → 고치고 → 저장».
+   여러 선생님이 같은 순간에 가입해도 서로의 기록을 덮어쓰지 않게 하기 위함입니다. */
+let dirStamp = 0;
+let dirBusy = false;
+async function dirCommit(fn) {
+  dirBusy = true;
+  try {
+    const loaded = await store.load(DIR_ROW);
+    const fresh = migrateDir(loaded.data);
+    const next = fn(fresh);            // 문제가 있으면 fn 안에서 throw
+    const ok = await store.save(DIR_ROW, next);
+    if (!ok) throw new Error("저장하지 못했어요. 인터넷 연결을 확인해 주세요.");
+    S.dir = migrateDir(next);
+    dirStamp = await store.stamp(DIR_ROW);
+    return S.dir;
+  } finally { dirBusy = false; }
+}
+
+/* ══════════════════════════════════════════════════════════
    전역 상태
    ══════════════════════════════════════════════════════════ */
 const S = {
-  data: null,
+  data: null,              // 지금 열어 둔 학급 데이터
+  dir: null,               // 선생님 · 학급 명부
+  rowId: null,             // 지금 열어 둔 학급 칸 이름
   ready: false,
-  session: null,           // { role:"teacher" } | { role:"student", studentId }
+  busy: "",                // 화면 전체 로딩 문구
+  authView: "login",       // "login" | "signup" | "sent"
+  authMsg: "",
+  adminPage: "pending",    // 관리자 화면 현재 페이지
+  /* session
+       { role:"admin" }                       관리자
+       { role:"teacher", tid, row }           선생님 (row 없으면 학급 고르기)
+       { role:"student", row, studentId }     학생                              */
+  session: null,
   preview: null,           // 교사가 학생 화면을 미리 볼 때: "pick" 또는 학생 id
   loginError: "",
   page: "home",            // 교사 화면 현재 페이지
@@ -470,19 +626,10 @@ function storeSession(s) {
     else window.sessionStorage.removeItem(SESSION_KEY);
   } catch (e) { /* 저장 못 해도 이번 접속 동안은 동작 */ }
 }
-/* 세션이 아직 유효한지 확인 (계정이 지워졌거나 잠겼을 수 있음) */
-function sessionValid(sess, d) {
-  if (!sess || !d) return false;
-  if (sess.role === "teacher") return !!d.auth.teacherId;
-  if (sess.role === "student") {
-    const st = d.students.find((x) => x.id === sess.studentId);
-    return !!(st && st.active && st.loginId);
-  }
-  return false;
-}
 function logout() {
   S.session = null; S.preview = null; S.loginError = ""; S.loginIdTyped = "";
   S.page = "home"; S.sel = []; S.studentPage = "wallet";
+  S.data = null; S.rowId = null; S.authView = "login"; S.authMsg = ""; S.busy = "";
   storeSession(null);
   render();
 }
@@ -492,7 +639,9 @@ function currentStudentId() {
   if (S.preview && S.preview !== "pick") return S.preview;
   return null;
 }
-function isTeacher() { return !!(S.session && S.session.role === "teacher"); }
+function isAdmin() { return !!(S.session && S.session.role === "admin"); }
+/* 학급 화면을 «선생님 권한으로» 보고 있는지 (관리자가 남의 학급을 열어 본 경우 포함) */
+function isTeacher() { return !!(S.session && (S.session.role === "teacher" || S.session.role === "admin")); }
 let saveTimer = null;
 let myStamp = 0;
 let firstLoad = true;
@@ -509,12 +658,44 @@ function patchQuiet(fn) {
   scheduleSave();
 }
 function scheduleSave() {
+  if (!S.rowId) return;
+  const row = S.rowId;
   clearTimeout(saveTimer);
   saveTimer = setTimeout(async () => {
-    await store.save(S.data);
-    myStamp = await store.stamp();
+    await store.save(row, S.data);
+    myStamp = await store.stamp(row);
     saveTimer = null;
+    if (isTeacher()) syncClassMeta(row);
   }, 600);
+}
+
+/* 학급 이름·학생 수·학생 아이디 목록을 명부에 반영 (달라졌을 때만) */
+async function syncClassMeta(row) {
+  if (!S.dir || !S.data || S.rowId !== row) return;
+  const mine = S.data.students.filter((s) => s.loginId).map((s) => s.loginId.toLowerCase());
+  const mineSet = new Set(mine);
+  const dir = S.dir;
+  const found = classByRow(row);
+  let need = false;
+  if (found && (found.cls.name !== S.data.className || found.cls.students !== S.data.students.length)) need = true;
+  mineSet.forEach((k) => { if (dir.index[k] !== row) need = true; });
+  Object.keys(dir.index).forEach((k) => { if (dir.index[k] === row && !mineSet.has(k)) need = true; });
+  if (!need) return;
+  try {
+    await dirCommit((fresh) => {
+      const idx = {};
+      Object.keys(fresh.index).forEach((k) => { if (fresh.index[k] !== row) idx[k] = fresh.index[k]; });
+      mineSet.forEach((k) => { if (!idx[k]) idx[k] = row; });   // 다른 학급이 먼저 쓴 아이디는 건드리지 않음
+      return Object.assign({}, fresh, {
+        index: idx,
+        teachers: fresh.teachers.map((t) => Object.assign({}, t, {
+          classes: t.classes.map((c) => (c.row === row
+            ? Object.assign({}, c, { name: S.data.className, students: S.data.students.length })
+            : c)),
+        })),
+      });
+    });
+  } catch (e) { /* 명부 갱신에 실패해도 학급 데이터는 이미 저장됨 */ }
 }
 
 function say(msg) {
@@ -792,57 +973,344 @@ function authShell(title, sub, inner) {
     '</div></div>';
 }
 
-/* 첫 실행: 선생님 계정 만들기 */
-function setupScreenHtml() {
-  return authShell("선생님 계정 만들기",
-    "이 기기에서 처음 여셨네요. 선생님이 쓸 아이디와 비밀번호를 정해 주세요. 학생 계정은 로그인한 뒤에 만들 수 있어요.",
-    '<label class="bs-lab" style="margin-top:18px;">선생님 아이디</label>' +
-    '<input class="bs-in" id="su-id" placeholder="teacher" autocomplete="off">' +
-    '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
-    '<input class="bs-in" id="su-pw" type="password" placeholder="4자 이상" autocomplete="new-password">' +
-    '<label class="bs-lab" style="margin-top:14px;">비밀번호 확인</label>' +
-    '<input class="bs-in" id="su-pw2" type="password" autocomplete="new-password">' +
-    '<div id="su-err" style="font-size:13px;color:var(--red);margin-top:10px;min-height:18px;"></div>' +
-    '<button type="button" class="bs-btn" id="su-go" style="width:100%;margin-top:6px;">계정 만들고 시작하기</button>' +
-    '<p style="font-size:12.5px;color:var(--dim);line-height:1.7;margin-top:14px;">' +
-      '비밀번호를 잊으면 되돌릴 방법이 파일 수정뿐이에요. 설정에서 백업을 꼭 내려받아 두세요.</p>');
-}
-
 /* 로그인 화면 */
 function loginScreenHtml() {
+  const canSignup = !S.dir || S.dir.signupOpen;
   return authShell("로그인", "선생님과 학생 모두 여기서 들어와요.",
     '<label class="bs-lab" style="margin-top:18px;">아이디</label>' +
     '<input class="bs-in" id="lg-id" autocomplete="username" value="' + escapeHtml(S.loginIdTyped || "") + '">' +
     '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
     '<input class="bs-in" id="lg-pw" type="password" autocomplete="current-password">' +
     '<div id="lg-err" style="font-size:13px;color:var(--red);margin-top:10px;min-height:18px;">' + escapeHtml(S.loginError) + '</div>' +
-    '<button type="button" class="bs-btn" id="lg-go" style="width:100%;margin-top:6px;">로그인</button>');
+    '<button type="button" class="bs-btn" id="lg-go" style="width:100%;margin-top:6px;">로그인</button>' +
+    '<div class="text-center" style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">' +
+      '<span style="font-size:13.5px;color:var(--dim);">처음 오신 선생님이신가요? </span>' +
+      (canSignup
+        ? '<button type="button" class="bs-link" id="lg-signup">가입 신청하기</button>'
+        : '<span style="font-size:13.5px;color:var(--mute);">지금은 가입 신청을 받지 않아요.</span>') +
+    '</div>');
+}
+
+/* 선생님 가입 신청 화면 */
+function signupScreenHtml() {
+  const v = S.signupForm || {};
+  const f = (id, label, extra, hint) =>
+    '<label class="bs-lab" style="margin-top:14px;">' + label +
+      (hint ? ' <span style="color:var(--mute);">' + hint + '</span>' : '') + '</label>' +
+    '<input class="bs-in" id="' + id + '" ' + (extra || '') + ' value="' + escapeHtml(v[id] || "") + '">';
+  return authShell("선생님 가입 신청",
+    "신청하면 관리자가 확인한 뒤 승인해 드려요. 승인이 되면 같은 아이디로 로그인해서 학급을 운영할 수 있어요.",
+    f("sg-name", "성함", 'autocomplete="name" placeholder="김선생"') +
+    f("sg-school", "학교", 'autocomplete="off" placeholder="○○초등학교"', "(선택)") +
+    f("sg-contact", "연락처", 'autocomplete="off" placeholder="이메일 또는 전화번호"', "(선택)") +
+    f("sg-class", "처음 만들 학급 이름", 'autocomplete="off" placeholder="3학년 2반"') +
+    '<div style="height:18px;"></div>' +
+    f("sg-id", "아이디", 'autocomplete="off" placeholder="영문·숫자, 띄어쓰기 없이"') +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
+    '<input class="bs-in" id="sg-pw" type="password" placeholder="4자 이상" autocomplete="new-password">' +
+    '<label class="bs-lab" style="margin-top:14px;">비밀번호 확인</label>' +
+    '<input class="bs-in" id="sg-pw2" type="password" autocomplete="new-password">' +
+    '<div id="sg-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;">' + escapeHtml(S.authMsg) + '</div>' +
+    '<button type="button" class="bs-btn" id="sg-go" style="width:100%;margin-top:6px;">가입 신청 보내기</button>' +
+    '<div class="text-center" style="margin-top:16px;">' +
+      '<button type="button" class="bs-link" id="sg-back">로그인으로 돌아가기</button></div>');
+}
+
+/* 신청 완료 안내 */
+function signupSentHtml() {
+  return authShell("신청을 보냈어요",
+    "관리자가 확인하고 승인하면 바로 쓸 수 있어요. 승인 뒤에 방금 만든 아이디로 로그인해 주세요.",
+    '<div class="bs-card bs-card-pad" style="background:var(--soft);border:0;margin-top:18px;">' +
+      '<div style="font-size:13.5px;color:var(--dim);line-height:1.8;">' +
+        '· 승인 전에는 로그인해도 «승인 대기» 안내만 나와요.<br>' +
+        '· 아이디와 비밀번호는 잊지 않게 적어 두세요.' +
+      '</div></div>' +
+    '<button type="button" class="bs-btn" id="sg-back" style="width:100%;margin-top:18px;">로그인 화면으로</button>');
+}
+
+/* 가입 신청 보내기 */
+async function submitSignup() {
+  const g = (id) => String(($("#" + id) || {}).value || "").trim();
+  const err = (m) => { const el = $("#sg-err"); if (el) el.textContent = m; };
+  const name = g("sg-name"), school = g("sg-school"), contact = g("sg-contact");
+  const className = g("sg-class") || "우리 반";
+  const loginId = g("sg-id");
+  const pw = String(($("#sg-pw") || {}).value || "");
+  const pw2 = String(($("#sg-pw2") || {}).value || "");
+  S.signupForm = { "sg-name": name, "sg-school": school, "sg-contact": contact, "sg-class": className, "sg-id": loginId };
+
+  if (!name) { err("성함을 적어 주세요."); return; }
+  if (!loginId) { err("아이디를 적어 주세요."); return; }
+  if (/\s/.test(loginId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
+  if (pw.length < 4) { err("비밀번호는 4자 이상으로 해 주세요."); return; }
+  if (pw !== pw2) { err("비밀번호가 서로 달라요."); return; }
+
+  const btn = $("#sg-go"); if (btn) { btn.disabled = true; btn.textContent = "보내는 중…"; }
+  try {
+    await dirCommit((fresh) => {
+      if (!fresh.signupOpen) throw new Error("지금은 가입 신청을 받지 않아요.");
+      const low = loginId.toLowerCase();
+      if (String(fresh.admin.id || "").toLowerCase() === low) throw new Error("이미 쓰고 있는 아이디예요.");
+      if (fresh.teachers.some((t) => t.loginId.toLowerCase() === low)) throw new Error("이미 쓰고 있는 아이디예요.");
+      if (Object.prototype.hasOwnProperty.call(fresh.index, low)) throw new Error("이미 쓰고 있는 아이디예요.");
+      const t = {
+        id: uid(), loginId, loginPw: hashPw(pw), name, school, contact,
+        status: "pending", memo: "", createdAt: now(), decidedAt: 0,
+        classes: [{ id: uid(), name: className, row: newClassRow(), createdAt: now(), students: 0 }],
+      };
+      return Object.assign({}, fresh, { teachers: fresh.teachers.concat([t]) });
+    });
+    S.authView = "sent"; S.authMsg = ""; S.signupForm = null;
+    S.loginIdTyped = loginId;
+    render();
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = "가입 신청 보내기"; }
+    err(e && e.message ? e.message : "보내지 못했어요. 잠시 뒤 다시 시도해 주세요.");
+  }
+}
+
+/* 명부 다시 읽기 */
+async function refreshDir() {
+  const loaded = await store.load(DIR_ROW);
+  if (loaded.data) { S.dir = migrateDir(loaded.data); dirStamp = loaded.stamp; }
+}
+function indexRow(low) {
+  const idx = S.dir ? S.dir.index : null;
+  if (!idx || !Object.prototype.hasOwnProperty.call(idx, low)) return null;
+  return idx[low];
 }
 
 /* 로그인 시도 */
-function tryLogin(id, pw) {
-  const d = S.data;
+async function tryLogin(id, pw) {
   id = String(id || "").trim();
   pw = String(pw || "");
   S.loginIdTyped = id;   // 실패해서 다시 그려도 아이디는 남겨 둠 (비번만 다시 입력하면 되게)
   if (!id || !pw) { S.loginError = "아이디와 비밀번호를 모두 입력해 주세요."; render(); return; }
+  try { await refreshDir(); } catch (e) { /* 못 읽으면 가지고 있던 명부로 */ }
+  const dir = S.dir;
+  if (!dir) { S.loginError = "아직 준비 중이에요. 잠시 뒤 다시 해 주세요."; render(); return; }
+  const low = id.toLowerCase();
 
-  if (d.auth.teacherId && id.toLowerCase() === d.auth.teacherId.toLowerCase()) {
-    if (pw === d.auth.teacherPw) {
-      S.session = { role: "teacher" }; S.loginError = ""; storeSession(S.session);
-      S.page = "home"; render(); say("선생님으로 로그인했어요.");
-    } else { S.loginError = "비밀번호가 맞지 않아요."; render(); }
+  /* 1) 관리자 */
+  if (dir.admin.id && low === String(dir.admin.id).toLowerCase()) {
+    if (!pwMatch(pw, dir.admin.pw)) { S.loginError = "비밀번호가 맞지 않아요."; render(); return; }
+    S.session = { role: "admin" }; S.loginError = ""; S.adminPage = "pending";
+    S.rowId = null; S.data = null;
+    storeSession(S.session);
+    render(); say("관리자로 로그인했어요.");
+    await refreshDir(); render();
     return;
   }
-  const st = d.students.find((s) => s.loginId && s.loginId.toLowerCase() === id.toLowerCase());
+
+  /* 2) 선생님 */
+  const t = dir.teachers.find((x) => x.loginId.toLowerCase() === low);
+  if (t) {
+    if (!pwMatch(pw, t.loginPw)) { S.loginError = "비밀번호가 맞지 않아요."; render(); return; }
+    if (t.status === "pending") { S.loginError = "아직 승인을 기다리는 중이에요. 승인되면 바로 들어올 수 있어요."; render(); return; }
+    if (t.status === "rejected") { S.loginError = "가입이 받아들여지지 않았어요. 관리자에게 문의해 주세요."; render(); return; }
+    if (t.status === "suspended") { S.loginError = "지금은 쓸 수 없는 계정이에요. 관리자에게 문의해 주세요."; render(); return; }
+    S.session = { role: "teacher", tid: t.id, row: null };
+    S.loginError = ""; S.page = "home"; S.sel = []; storeSession(S.session);
+    say((t.name || t.loginId) + " 선생님, 반가워요.");
+    if (t.classes.length === 1) { await openClass(t.classes[0].row); }
+    else render();
+    return;
+  }
+
+  /* 3) 학생 — 명부에서 어느 학급인지 찾아본다 */
+  const row = indexRow(low);
+  if (!row) { S.loginError = "그런 아이디가 없어요. 선생님께 확인해 주세요."; render(); return; }
+  S.busy = "들어가는 중이에요"; S.loginError = ""; render();
+  const loaded = await store.load(row);
+  S.busy = "";
+  const d = migrate(loaded.data);
+  const st = d.students.find((s) => s.loginId && s.loginId.toLowerCase() === low);
   if (!st) { S.loginError = "그런 아이디가 없어요. 선생님께 확인해 주세요."; render(); return; }
+  const owner = classByRow(row);
+  if (owner && owner.teacher.status !== "approved") {
+    S.loginError = "지금은 우리 반 계정을 쓸 수 없어요. 선생님께 말씀드리세요."; render(); return;
+  }
   if (!st.active) { S.loginError = "지금은 사용할 수 없는 계정이에요. 선생님께 말씀드리세요."; render(); return; }
   if (st.loginPw !== pw) { S.loginError = "비밀번호가 맞지 않아요."; render(); return; }
 
-  S.session = { role: "student", studentId: st.id };
+  S.data = d; S.rowId = row; myStamp = loaded.stamp;
+  S.session = { role: "student", row, studentId: st.id };
   S.loginError = ""; S.studentPage = "wallet"; storeSession(S.session);
   render(); say(st.name + "님, 반가워요.");
   if (!st.pwChanged) { setTimeout(() => openStudentPwModal(true), 350); }   // 첫 접속이면 비번 바꾸기 안내
+}
+
+/* ══════════════════════════════════════════════════════════
+   학급 열기 · 만들기
+   ══════════════════════════════════════════════════════════ */
+async function openClass(row) {
+  S.rowId = row; S.data = null; S.preview = null;
+  S.page = "home"; S.sel = []; S.busy = "학급을 여는 중이에요";
+  if (S.session) { S.session = Object.assign({}, S.session, { row }); storeSession(S.session); }
+  render();
+  const loaded = await store.load(row);
+  myStamp = loaded.stamp;
+  const meta = classByRow(row);
+  S.data = migrate(loaded.data);
+  if (!loaded.data) {                       // 아직 아무것도 없는 새 학급
+    if (meta) S.data.className = meta.cls.name;
+    scheduleSave();
+  }
+  S.busy = "";
+  render();
+}
+async function leaveClass() {
+  S.rowId = null; S.data = null; S.preview = null; S.page = "home"; S.sel = [];
+  if (S.session) { S.session = Object.assign({}, S.session, { row: null }); storeSession(S.session); }
+  render();
+  try { await refreshDir(); render(); } catch (e) { /* 못 읽으면 가지고 있던 목록 그대로 */ }
+}
+async function createClass(name) {
+  const t = myTeacher();
+  if (!t) return;
+  const entry = { id: uid(), name: String(name || "우리 반").trim() || "우리 반", row: newClassRow(), createdAt: now(), students: 0 };
+  try {
+    await dirCommit((fresh) => {
+      const me = fresh.teachers.find((x) => x.id === t.id);
+      if (!me) throw new Error("계정을 찾지 못했어요. 다시 로그인해 주세요.");
+      if (me.classes.length >= 12) throw new Error("학급은 12개까지 만들 수 있어요.");
+      return Object.assign({}, fresh, {
+        teachers: fresh.teachers.map((x) => (x.id === t.id
+          ? Object.assign({}, x, { classes: x.classes.concat([entry]) }) : x)),
+      });
+    });
+  } catch (e) { say(e && e.message ? e.message : "만들지 못했어요."); return; }
+  await openClass(entry.row);
+  say("새 학급을 만들었어요.");
+}
+
+/* 학급 고르기 화면 */
+function classPickerHtml(t) {
+  const list = t.classes;
+  let inner = '<div class="bs" style="min-height:100vh;">' +
+    '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:900px;">' +
+      '<div class="bs-mark">Choi<span>\'s</span></div>' +
+      '<div class="flex items-center gap-2">' +
+        '<span class="bs-pill" style="cursor:default;">' + escapeHtml(t.name || t.loginId) + ' 선생님</span>' +
+        '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
+      '</div></div></div>' +
+    '<div class="mx-auto px-5 py-7" style="max-width:900px;">' +
+    PageHead("내 학급", "학급을 골라 들어가세요. 학급마다 학생·상점·주식이 따로 굴러가요.",
+      '<button type="button" class="bs-btn bs-btn-sm" id="cls-new">새 학급 만들기</button>');
+
+  if (!list.length) {
+    inner += Empty("아직 학급이 없어요.", '<button type="button" class="bs-btn bs-btn-sm" id="cls-new2">첫 학급 만들기</button>');
+  } else {
+    inner += '<div class="grid gap-4" style="grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));">';
+    list.forEach((c) => {
+      inner += '<div class="bs-clscard">' +
+        '<div style="font-size:17px;font-weight:800;letter-spacing:-.02em;">' + escapeHtml(c.name) + '</div>' +
+        '<div style="font-size:13px;color:var(--dim);margin-top:5px;">학생 ' +
+          '<b class="bs-num" style="color:var(--ink);">' + fmt(c.students) + '</b>명' +
+          (c.createdAt ? ' · ' + new Date(c.createdAt).toLocaleDateString("ko-KR") + ' 만듦' : '') + '</div>' +
+        '<div class="flex gap-2 mt-4 flex-wrap">' +
+          '<button type="button" class="bs-btn bs-btn-sm" data-cls-open="' + c.row + '">들어가기</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-cls-rename="' + c.id + '">이름 바꾸기</button>' +
+          '<button type="button" class="bs-btn bs-btn-d bs-btn-sm" data-cls-del="' + c.id + '">삭제</button>' +
+        '</div></div>';
+    });
+    inner += '</div>';
+  }
+  inner += '</div></div>';
+  return inner;
+}
+
+/* 새 학급 만들기 */
+function openNewClassModal() {
+  let name = "";
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">' +
+      '학급마다 학생·포인트·상점·주식이 따로 굴러가요. 학년이 바뀌면 새 학급을 만들어 쓰시면 돼요.</p>' +
+    '<label class="bs-lab" style="margin-top:16px;">학급 이름</label>' +
+    '<input class="bs-in" id="cn-name" placeholder="3학년 2반" autocomplete="off">' +
+    '<div class="flex gap-2 justify-end mt-4">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="cn-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="cn-go" disabled>만들기</button></div>';
+  const root = showModal("새 학급", body, {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "cn-name") { name = e.target.value; $("#cn-go", root).disabled = !name.trim(); }
+  });
+  root.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.id === "cn-name") { e.preventDefault(); const b = $("#cn-go", root); if (b && !b.disabled) b.click(); }
+  });
+  root.addEventListener("click", (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "cn-cancel") { closeModal(); return; }
+    if (t.id === "cn-go") {
+      const clean = name.trim();
+      if (!clean) return;
+      closeModal();
+      createClass(clean);
+    }
+  });
+}
+
+/* 학급 이름 바꾸기 · 삭제 */
+function openClassRenameModal(c) {
+  let name = c.name;
+  const body =
+    '<label class="bs-lab">학급 이름</label>' +
+    '<input class="bs-in" id="cr-name" value="' + escapeHtml(name) + '">' +
+    '<div class="flex gap-2 justify-end mt-4">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="cr-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="cr-save">저장</button></div>';
+  const root = showModal("학급 이름", body, {});
+  root.addEventListener("input", (e) => { if (e.target.id === "cr-name") name = e.target.value; });
+  root.addEventListener("click", async (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "cr-cancel") { closeModal(); return; }
+    if (t.id === "cr-save") {
+      const clean = String(name || "").trim();
+      if (!clean) return;
+      try {
+        await dirCommit((fresh) => Object.assign({}, fresh, {
+          teachers: fresh.teachers.map((x) => Object.assign({}, x, {
+            classes: x.classes.map((y) => (y.id === c.id ? Object.assign({}, y, { name: clean }) : y)),
+          })),
+        }));
+      } catch (err) { say("바꾸지 못했어요."); return; }
+      closeModal(); render(); say("학급 이름을 바꿨어요.");
+    }
+  });
+}
+function openClassDeleteModal(c) {
+  let typed = "";
+  const body =
+    '<p style="font-size:14px;line-height:1.8;">«' + escapeHtml(c.name) + '» 학급의 학생·포인트·기록이 모두 사라져요. ' +
+      '되돌릴 수 없으니 필요하면 먼저 백업을 내려받아 주세요.</p>' +
+    '<label class="bs-lab" style="margin-top:16px;">확인을 위해 <b style="color:var(--ink);">삭제</b> 라고 적어 주세요</label>' +
+    '<input class="bs-in" id="cd-word" autocomplete="off">' +
+    '<div class="flex gap-2 justify-end mt-4">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="cd-cancel">취소</button>' +
+      '<button type="button" class="bs-btn bs-btn-d" id="cd-go" disabled>학급 삭제</button></div>';
+  const root = showModal("학급 삭제", body, {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "cd-word") { typed = e.target.value.trim(); $("#cd-go", root).disabled = typed !== "삭제"; }
+  });
+  root.addEventListener("click", async (e) => {
+    const t = e.target.closest("button") || e.target;
+    if (t.id === "cd-cancel") { closeModal(); return; }
+    if (t.id === "cd-go" && typed === "삭제") {
+      try {
+        await dirCommit((fresh) => {
+          const idx = {};
+          Object.keys(fresh.index).forEach((k) => { if (fresh.index[k] !== c.row) idx[k] = fresh.index[k]; });
+          return Object.assign({}, fresh, {
+            index: idx,
+            teachers: fresh.teachers.map((x) => Object.assign({}, x, { classes: x.classes.filter((y) => y.id !== c.id) })),
+          });
+        });
+        await store.remove(c.row);
+      } catch (err) { say("지우지 못했어요."); return; }
+      if (S.rowId === c.row) { S.rowId = null; S.data = null; if (S.session) { S.session = Object.assign({}, S.session, { row: null }); storeSession(S.session); } }
+      closeModal(); render(); say("학급을 지웠어요.");
+    }
+  });
 }
 
 /* ══════════ 학생 추가 모달 ══════════ */
@@ -873,9 +1341,7 @@ function openAddStudentsModal() {
       if (!names.length) return;
       patch((d) => {
         let no = d.students.reduce((m, s) => Math.max(m, s.no), 0);
-        const taken = new Set();
-        d.students.forEach((s) => { if (s.loginId) taken.add(s.loginId.toLowerCase()); });
-        if (d.auth.teacherId) taken.add(d.auth.teacherId.toLowerCase());
+        const taken = takenIdSet();
         const added = names.map((n) => {
           const loginId = uniqueLoginId(n, taken);   // 아이디는 이름 그대로 (겹치면 뒤에 숫자)
           taken.add(loginId.toLowerCase());
@@ -1459,8 +1925,9 @@ function openDividendModal() {
 
 /* 선생님 계정 변경 모달 */
 function openTeacherAccountModal() {
-  const d = S.data;
-  let id = d.auth.teacherId;
+  const me = myTeacher();
+  if (!me) { say("관리자로 열어 본 학급이에요. 선생님 계정은 여기서 바꿀 수 없어요."); return; }
+  let id = me.loginId;
   let cur = "", pw = "", pw2 = "";
   const body =
     '<label class="bs-lab">아이디</label>' +
@@ -1492,18 +1959,22 @@ function openTeacherAccountModal() {
       const cleanId = String(id || "").trim();
       if (!cleanId) { err("아이디를 적어 주세요."); return; }
       if (/\s/.test(cleanId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
-      if (cur !== S.data.auth.teacherPw) { err("지금 비밀번호가 맞지 않아요."); return; }
-      if (S.data.students.some((s) => s.loginId && s.loginId.toLowerCase() === cleanId.toLowerCase())) {
-        err("학생이 쓰고 있는 아이디예요."); return;
-      }
+      if (!pwMatch(cur, me.loginPw)) { err("지금 비밀번호가 맞지 않아요."); return; }
       if (pw || pw2) {
         if (pw.length < 4) { err("새 비밀번호는 4자 이상으로 해 주세요."); return; }
         if (pw !== pw2) { err("새 비밀번호가 서로 달라요."); return; }
       }
-      patch((dd) => Object.assign({}, dd, {
-        auth: { teacherId: cleanId, teacherPw: pw ? pw : dd.auth.teacherPw },
-      }));
-      closeModal(); say("선생님 계정을 바꿨어요.");
+      dirCommit((fresh) => {
+        const low = cleanId.toLowerCase();
+        if (String(fresh.admin.id || "").toLowerCase() === low) throw new Error("이미 쓰고 있는 아이디예요.");
+        if (fresh.teachers.some((x) => x.id !== me.id && x.loginId.toLowerCase() === low)) throw new Error("다른 선생님이 쓰고 있는 아이디예요.");
+        if (Object.prototype.hasOwnProperty.call(fresh.index, low)) throw new Error("학생이 쓰고 있는 아이디예요.");
+        return Object.assign({}, fresh, {
+          teachers: fresh.teachers.map((x) => (x.id === me.id
+            ? Object.assign({}, x, { loginId: cleanId, loginPw: pw ? hashPw(pw) : x.loginPw }) : x)),
+        });
+      }).then(() => { closeModal(); render(); say("선생님 계정을 바꿨어요."); })
+        .catch((er) => err(er && er.message ? er.message : "저장하지 못했어요."));
     }
   });
 }
@@ -2015,12 +2486,18 @@ function renderStocksPage() {
 /* ══════════════════════════════════════════════════════════
    교사 화면 — 학생 계정
    ══════════════════════════════════════════════════════════ */
+/* 아이디가 이미 쓰이고 있는지 — 우리 반뿐 아니라 다른 학급·선생님까지 살펴봅니다 */
 function loginIdTaken(id, exceptStudentId) {
   const d = S.data;
   const low = String(id || "").trim().toLowerCase();
   if (!low) return false;
-  if (d.auth.teacherId && d.auth.teacherId.toLowerCase() === low) return true;
-  return d.students.some((s) => s.id !== exceptStudentId && s.loginId && s.loginId.toLowerCase() === low);
+  if (d.students.some((s) => s.id !== exceptStudentId && s.loginId && s.loginId.toLowerCase() === low)) return true;
+  const dir = S.dir;
+  if (!dir) return false;
+  if (String(dir.admin.id || "").toLowerCase() === low) return true;
+  if (dir.teachers.some((t) => t.loginId.toLowerCase() === low)) return true;
+  const owner = indexRow(low);
+  return !!(owner && owner !== S.rowId);
 }
 function randomPw() { return String(Math.floor(1000 + Math.random() * 9000)); }
 /* 이름을 로그인 아이디로. 띄어쓰기는 없애고, 겹치면 뒤에 숫자를 붙임 */
@@ -2151,9 +2628,7 @@ function openAccountModal(student) {
 /* 계정 자동 생성 */
 function generateAccounts() {
   let made = 0;
-  const taken = new Set();
-  S.data.students.forEach((s) => { if (s.loginId) taken.add(s.loginId.toLowerCase()); });
-  if (S.data.auth.teacherId) taken.add(S.data.auth.teacherId.toLowerCase());
+  const taken = takenIdSet();
   patch((d) => ({
     ...d,
     students: d.students.map((s) => {
@@ -2212,13 +2687,19 @@ function renderSettingsPage() {
       '<button type="button" class="bs-chip" id="set-mode-approval" data-on="' + (d.storeMode === "approval") + '">승인 후 구매</button>' +
     '</div></div>';
 
+  const meT = myTeacher();
   html += '<div class="bs-card bs-card-pad">' +
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">선생님 계정</div>' +
-    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">' +
-      '지금 아이디 <b class="bs-num" style="color:var(--ink);">' + escapeHtml(d.auth.teacherId) + '</b></p>' +
-    '<div class="flex gap-2 mt-3 flex-wrap">' +
-      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-teacher-acc">아이디·비밀번호 바꾸기</button>' +
-    '</div></div>';
+    (meT
+      ? '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">지금 아이디 ' +
+          '<b class="bs-num" style="color:var(--ink);">' + escapeHtml(meT.loginId) + '</b></p>' +
+        '<div class="flex gap-2 mt-3 flex-wrap">' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-teacher-acc">아이디·비밀번호 바꾸기</button>' +
+          '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="go-classes">내 학급 목록</button>' +
+        '</div>'
+      : '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">관리자로 열어 본 학급이에요. ' +
+          '담임 선생님 계정은 관리자 화면에서 관리할 수 있어요.</p>') +
+  '</div>';
 
   html += '<div class="bs-card bs-card-pad">' +
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생에게 허용할 기능</div>' +
@@ -2410,7 +2891,7 @@ function studentAppHtml() {
 
 /* ══════════ 학생 모드 — 비밀번호 바꾸기 ══════════ */
 function openStudentPwModal(firstTime) {
-  const me = S.data.students.find((s) => s.id === currentStudentId());
+  const me = S.data ? S.data.students.find((s) => s.id === currentStudentId()) : null;
   if (!me) return;
   let pw = "", pw2 = "";
   const body =
@@ -2669,11 +3150,14 @@ function teacherAppHtml() {
     }
   });
 
+  const adminView = isAdmin();
   return '<div class="bs">' +
+    (adminView ? '<div class="bs-note">관리자로 열어 본 학급이에요 · 여기서 고치면 실제로 반영돼요</div>' : '') +
     '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:1240px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
       '<div class="flex items-center gap-2">' +
-        '<span class="bs-pill" style="cursor:default;">' + escapeHtml(d.className) + '</span>' +
+        '<button type="button" class="bs-pill" id="go-classes">' +
+          (adminView ? "관리자 화면으로" : escapeHtml(d.className) + " ▾") + '</button>' +
         '<button type="button" class="bs-pill" id="go-preview">학생 화면 미리보기</button>' +
         '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
       '</div></div></div>' +
@@ -2686,27 +3170,425 @@ function teacherAppHtml() {
 }
 
 /* ══════════════════════════════════════════════════════════
+   관리자 화면
+   ══════════════════════════════════════════════════════════ */
+const ADMIN_NAV = [
+  { k: "pending", ico: "◔", label: "승인 대기" },
+  { k: "teachers", ico: "◉", label: "선생님" },
+  { k: "classes", ico: "▦", label: "학급" },
+  { k: "asettings", ico: "⚙", label: "관리자 설정" },
+];
+
+function teacherLine(t) {
+  const bits = [];
+  if (t.school) bits.push(escapeHtml(t.school));
+  if (t.contact) bits.push(escapeHtml(t.contact));
+  return bits.join(" · ");
+}
+
+function adminPendingPage() {
+  const list = S.dir.teachers.filter((t) => t.status === "pending").sort((a, b) => b.createdAt - a.createdAt);
+  let html = PageHead("승인 대기", "가입을 신청한 선생님이에요. 승인하면 바로 학급을 만들어 쓸 수 있어요.", "");
+  if (!list.length) return html + Empty("기다리는 신청이 없어요.");
+  html += '<div class="grid gap-4" style="grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));">';
+  list.forEach((t) => {
+    html += '<div class="bs-card bs-card-pad">' +
+      '<div class="flex items-center gap-2" style="margin-bottom:12px;">' + Avatar(t.name || t.loginId, 36) +
+        '<div style="min-width:0;">' +
+          '<div style="font-weight:700;font-size:15px;">' + escapeHtml(t.name || t.loginId) + '</div>' +
+          '<div style="font-size:12.5px;color:var(--dim);">' + (teacherLine(t) || "학교 · 연락처 없음") + '</div>' +
+        '</div></div>' +
+      '<div style="font-size:13.5px;color:var(--dim);line-height:1.9;border-top:1px solid var(--line);padding-top:11px;">' +
+        '아이디 <b class="bs-num" style="color:var(--ink);">' + escapeHtml(t.loginId) + '</b><br>' +
+        '만들 학급 <b style="color:var(--ink);">' + escapeHtml((t.classes[0] && t.classes[0].name) || "—") + '</b><br>' +
+        '신청 ' + (t.createdAt ? when(t.createdAt) : "—") +
+      '</div>' +
+      '<div class="flex gap-2 mt-4">' +
+        '<button type="button" class="bs-btn bs-btn-sm" data-adm-ok="' + t.id + '">승인</button>' +
+        '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-adm-no="' + t.id + '">거절</button>' +
+      '</div></div>';
+  });
+  return html + '</div>';
+}
+
+function adminTeachersPage() {
+  const list = S.dir.teachers.slice().sort((a, b) => (a.name || a.loginId).localeCompare(b.name || b.loginId, "ko"));
+  let html = PageHead("선생님", "가입한 선생님과 상태를 관리해요.", "");
+  if (!list.length) return html + Empty("아직 가입한 선생님이 없어요.");
+  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    '<thead><tr><th style="width:180px;">선생님</th><th style="width:130px;">아이디</th>' +
+    '<th style="width:180px;">학교 · 연락처</th><th style="width:90px;">학급</th>' +
+    '<th style="width:100px;">상태</th><th style="width:90px;"></th></tr></thead><tbody>';
+  list.forEach((t) => {
+    html += '<tr>' +
+      '<td><span class="flex items-center gap-2">' + Avatar(t.name || t.loginId, 28) +
+        '<span style="font-weight:600;">' + escapeHtml(t.name || t.loginId) + '</span></span></td>' +
+      '<td><span class="bs-num">' + escapeHtml(t.loginId) + '</span></td>' +
+      '<td style="color:var(--dim);font-size:13.5px;">' + (teacherLine(t) || "—") + '</td>' +
+      '<td class="bs-num">' + t.classes.length + '개</td>' +
+      '<td><span class="bs-badge ' + STATUS_CLASS[t.status] + '">' + STATUS_LABEL[t.status] + '</span></td>' +
+      '<td class="bs-r"><button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-adm-edit="' + t.id + '">관리</button></td>' +
+    '</tr>';
+  });
+  return html + '</tbody></table></div></div>';
+}
+
+function adminClassesPage() {
+  const list = allClasses();
+  let html = PageHead("학급", "모든 선생님의 학급이에요. «열기»를 누르면 그 학급 화면을 그대로 볼 수 있어요.", "");
+  if (!list.length) return html + Empty("아직 만들어진 학급이 없어요.");
+  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    '<thead><tr><th style="width:200px;">학급</th><th style="width:150px;">담임</th>' +
+    '<th style="width:90px;">학생</th><th style="width:120px;">만든 날</th><th style="width:150px;"></th></tr></thead><tbody>';
+  list.sort((a, b) => a.cls.name.localeCompare(b.cls.name, "ko")).forEach((x) => {
+    html += '<tr>' +
+      '<td style="font-weight:600;">' + escapeHtml(x.cls.name) + '</td>' +
+      '<td style="color:var(--dim);">' + escapeHtml(x.teacher.name || x.teacher.loginId) + '</td>' +
+      '<td class="bs-num">' + fmt(x.cls.students) + '명</td>' +
+      '<td style="color:var(--dim);font-size:13.5px;">' + (x.cls.createdAt ? new Date(x.cls.createdAt).toLocaleDateString("ko-KR") : "—") + '</td>' +
+      '<td class="bs-r"><span class="flex gap-2 justify-end">' +
+        '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" data-adm-open="' + x.cls.row + '">열기</button>' +
+        '<button type="button" class="bs-btn bs-btn-d bs-btn-sm" data-adm-clsdel="' + x.cls.id + '">삭제</button>' +
+      '</span></td></tr>';
+  });
+  return html + '</tbody></table></div></div>';
+}
+
+function adminSettingsPage() {
+  const dir = S.dir;
+  const nStudents = Object.keys(dir.index).length;
+  let html = PageHead("관리자 설정", "이 도구 전체에 해당하는 설정이에요.", "");
+  html += '<div class="grid gap-4" style="grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));">';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">관리자 계정</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">지금 아이디 ' +
+      '<b style="color:var(--ink);">' + escapeHtml(dir.admin.id) + '</b></p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="adm-acc">아이디·비밀번호 바꾸기</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">가입 신청 받기</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">끄면 로그인 화면에서 «가입 신청하기»가 사라져요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-chip" id="adm-signup-on" data-on="' + dir.signupOpen + '">받는 중</button>' +
+      '<button type="button" class="bs-chip" id="adm-signup-off" data-on="' + (!dir.signupOpen) + '">받지 않음</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">학생 아이디 목록</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">' +
+      '학생이 로그인할 때 어느 학급인지 찾는 목록이에요. 지금 <b class="bs-num" style="color:var(--ink);">' + fmt(nStudents) + '</b>개가 담겨 있어요. ' +
+      '학생이 «아이디가 없다»는 말을 들으면 한 번 다시 만들어 보세요.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="adm-reindex">다시 만들기</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">명부 백업</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">선생님·학급 목록만 파일로 내려받아요. (학급 안 데이터는 각 학급 설정에서)</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="adm-backup">명부 내려받기</button>' +
+    '</div></div>';
+
+  html += '</div>';
+  return html;
+}
+
+function adminBody() {
+  switch (S.adminPage) {
+    case "teachers": return adminTeachersPage();
+    case "classes": return adminClassesPage();
+    case "asettings": return adminSettingsPage();
+    default: return adminPendingPage();
+  }
+}
+
+function adminAppHtml() {
+  const pending = S.dir.teachers.filter((t) => t.status === "pending").length;
+  let navHtml = "";
+  ADMIN_NAV.forEach((n) => {
+    const badge = n.k === "pending" ? pending : 0;
+    navHtml += '<button type="button" data-anav="' + n.k + '" data-on="' + (S.adminPage === n.k) + '">' +
+      '<span class="bs-nav-ico">' + n.ico + '</span><span class="bs-lbl">' + n.label + '</span>' +
+      (badge ? '<span class="bs-badge-n">' + badge + '</span>' : '') + '</button>';
+  });
+  return '<div class="bs">' +
+    '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:1240px;">' +
+      '<div class="bs-mark">Choi<span>\'s</span></div>' +
+      '<div class="flex items-center gap-2">' +
+        '<span class="bs-pill" style="cursor:default;">관리자 · ' + escapeHtml(S.dir.admin.id) + '</span>' +
+        '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
+      '</div></div></div>' +
+    '<div class="bs-shell mx-auto flex gap-7 px-5 py-7" style="max-width:1240px;">' +
+      '<aside class="bs-side"><nav class="bs-nav">' + navHtml + '</nav></aside>' +
+      '<main style="flex:1;min-width:0;">' + adminBody() + '</main>' +
+    '</div></div>';
+}
+
+/* ── 관리자 동작 ────────────────────────────────────────── */
+async function setTeacherStatus(tid, status) {
+  try {
+    await dirCommit((fresh) => Object.assign({}, fresh, {
+      teachers: fresh.teachers.map((t) => (t.id === tid
+        ? Object.assign({}, t, { status, decidedAt: now() }) : t)),
+    }));
+  } catch (e) { say("바꾸지 못했어요."); return; }
+  render();
+  say({ approved: "승인했어요.", rejected: "거절했어요.", suspended: "계정을 정지했어요.", pending: "다시 대기로 바꿨어요." }[status]);
+}
+
+function openTeacherAdminModal(t) {
+  let name = t.name, school = t.school, contact = t.contact, memo = t.memo;
+  const body =
+    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + Avatar(t.name || t.loginId, 34) +
+      '<div><div style="font-weight:700;">' + escapeHtml(t.name || t.loginId) + '</div>' +
+      '<div style="font-size:12.5px;color:var(--dim);">아이디 ' + escapeHtml(t.loginId) +
+        ' · <span class="bs-badge ' + STATUS_CLASS[t.status] + '">' + STATUS_LABEL[t.status] + '</span></div></div></div>' +
+    '<label class="bs-lab">성함</label><input class="bs-in" id="tm-name" value="' + escapeHtml(name) + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">학교</label><input class="bs-in" id="tm-school" value="' + escapeHtml(school) + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">연락처</label><input class="bs-in" id="tm-contact" value="' + escapeHtml(contact) + '">' +
+    '<label class="bs-lab" style="margin-top:14px;">관리자 메모</label><input class="bs-in" id="tm-memo" value="' + escapeHtml(memo) + '">' +
+    '<label class="bs-lab" style="margin-top:18px;">상태</label>' +
+    '<div class="flex gap-2 flex-wrap">' +
+      T_STATUS.map((s) => '<button type="button" class="bs-chip" data-tm-st="' + s + '" data-on="' + (t.status === s) + '">' +
+        STATUS_LABEL[s] + '</button>').join("") +
+    '</div>' +
+    '<div style="margin-top:18px;padding-top:16px;border-top:1px solid var(--line);">' +
+      '<div style="font-size:13.5px;color:var(--dim);line-height:1.7;">학급 ' + t.classes.length + '개 · ' +
+        escapeHtml(t.classes.map((c) => c.name).join(", ") || "없음") + '</div>' +
+      '<div class="flex gap-2 mt-3 flex-wrap">' +
+        '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="tm-pw">비밀번호 새로 정하기</button>' +
+        '<button type="button" class="bs-btn bs-btn-d bs-btn-sm" id="tm-del">선생님 삭제</button>' +
+      '</div></div>' +
+    '<div id="tm-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;"></div>' +
+    '<div class="flex gap-2 justify-end mt-2">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="tm-cancel">닫기</button>' +
+      '<button type="button" class="bs-btn" id="tm-save">저장</button></div>';
+  const root = showModal("선생님 관리", body, {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "tm-name") name = e.target.value;
+    if (e.target.id === "tm-school") school = e.target.value;
+    if (e.target.id === "tm-contact") contact = e.target.value;
+    if (e.target.id === "tm-memo") memo = e.target.value;
+  });
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button") || e.target;
+    const st = b.getAttribute && b.getAttribute("data-tm-st");
+    if (st) { await setTeacherStatus(t.id, st); closeModal(); return; }
+    if (b.id === "tm-cancel") { closeModal(); return; }
+    if (b.id === "tm-pw") { closeModal(); openTeacherPwResetModal(t); return; }
+    if (b.id === "tm-del") { closeModal(); openTeacherDeleteModal(t); return; }
+    if (b.id === "tm-save") {
+      try {
+        await dirCommit((fresh) => Object.assign({}, fresh, {
+          teachers: fresh.teachers.map((x) => (x.id === t.id
+            ? Object.assign({}, x, { name: name.trim(), school: school.trim(), contact: contact.trim(), memo: memo.trim() }) : x)),
+        }));
+      } catch (err) { $("#tm-err", root).textContent = "저장하지 못했어요."; return; }
+      closeModal(); render(); say("저장했어요.");
+    }
+  });
+}
+
+function openTeacherPwResetModal(t) {
+  let pw = "";
+  const body =
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">' +
+      escapeHtml(t.name || t.loginId) + ' 선생님의 비밀번호를 새로 정해요. 정한 뒤에는 직접 알려 주셔야 해요.</p>' +
+    '<label class="bs-lab" style="margin-top:16px;">새 비밀번호</label>' +
+    '<div class="flex gap-2"><input class="bs-in bs-num" id="tp-pw" autocomplete="off" value="">' +
+      '<button type="button" class="bs-chip" id="tp-rand" style="flex-shrink:0;">자동</button></div>' +
+    '<div id="tp-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;"></div>' +
+    '<div class="flex gap-2 justify-end mt-2">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="tp-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="tp-save">이 비밀번호로 정하기</button></div>';
+  const root = showModal("비밀번호 새로 정하기", body, {});
+  root.addEventListener("input", (e) => { if (e.target.id === "tp-pw") pw = e.target.value; });
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button") || e.target;
+    if (b.id === "tp-rand") { pw = String(Math.floor(100000 + Math.random() * 900000)); $("#tp-pw", root).value = pw; return; }
+    if (b.id === "tp-cancel") { closeModal(); return; }
+    if (b.id === "tp-save") {
+      if (String(pw).length < 4) { $("#tp-err", root).textContent = "4자 이상으로 정해 주세요."; return; }
+      try {
+        await dirCommit((fresh) => Object.assign({}, fresh, {
+          teachers: fresh.teachers.map((x) => (x.id === t.id ? Object.assign({}, x, { loginPw: hashPw(pw) }) : x)),
+        }));
+      } catch (err) { $("#tp-err", root).textContent = "저장하지 못했어요."; return; }
+      const shown = pw;
+      closeModal(); render();
+      showModal("새 비밀번호",
+        '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(t.name || t.loginId) + ' 선생님께 이 비밀번호를 알려 주세요.</p>' +
+        '<div class="bs-card bs-card-pad bs-num" style="background:var(--soft);border:0;margin-top:14px;text-align:center;' +
+          'font-size:26px;font-weight:800;letter-spacing:.06em;">' + escapeHtml(shown) + '</div>', {});
+    }
+  });
+}
+
+function openTeacherDeleteModal(t) {
+  let typed = "";
+  const body =
+    '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(t.name || t.loginId) + ' 선생님 계정과 학급 ' +
+      t.classes.length + '개(' + escapeHtml(t.classes.map((c) => c.name).join(", ") || "없음") + ')를 모두 지워요. 되돌릴 수 없어요.</p>' +
+    '<label class="bs-lab" style="margin-top:16px;">확인을 위해 <b style="color:var(--ink);">삭제</b> 라고 적어 주세요</label>' +
+    '<input class="bs-in" id="td-word" autocomplete="off">' +
+    '<div class="flex gap-2 justify-end mt-4">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="td-cancel">취소</button>' +
+      '<button type="button" class="bs-btn bs-btn-d" id="td-go" disabled>모두 삭제</button></div>';
+  const root = showModal("선생님 삭제", body, {});
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "td-word") { typed = e.target.value.trim(); $("#td-go", root).disabled = typed !== "삭제"; }
+  });
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button") || e.target;
+    if (b.id === "td-cancel") { closeModal(); return; }
+    if (b.id === "td-go" && typed === "삭제") {
+      const rows = t.classes.map((c) => c.row);
+      try {
+        await dirCommit((fresh) => {
+          const idx = {};
+          Object.keys(fresh.index).forEach((k) => { if (rows.indexOf(fresh.index[k]) < 0) idx[k] = fresh.index[k]; });
+          return Object.assign({}, fresh, { index: idx, teachers: fresh.teachers.filter((x) => x.id !== t.id) });
+        });
+        for (let i = 0; i < rows.length; i++) { if (rows[i] !== ROW) await store.remove(rows[i]); }
+      } catch (err) { say("지우지 못했어요."); return; }
+      closeModal(); render(); say("삭제했어요.");
+    }
+  });
+}
+
+function openAdminAccountModal() {
+  const dir = S.dir;
+  let id = dir.admin.id, cur = "", pw = "", pw2 = "";
+  const body =
+    '<label class="bs-lab">관리자 아이디</label>' +
+    '<input class="bs-in" id="am-id" autocomplete="off" value="' + escapeHtml(id) + '">' +
+    '<label class="bs-lab" style="margin-top:16px;">지금 비밀번호</label>' +
+    '<input class="bs-in" id="am-cur" type="password" autocomplete="off">' +
+    '<label class="bs-lab" style="margin-top:16px;">새 비밀번호 <span style="color:var(--mute);">(그대로 두려면 비워 두세요)</span></label>' +
+    '<input class="bs-in" id="am-pw" type="password" autocomplete="new-password">' +
+    '<label class="bs-lab" style="margin-top:14px;">새 비밀번호 확인</label>' +
+    '<input class="bs-in" id="am-pw2" type="password" autocomplete="new-password">' +
+    '<div id="am-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;"></div>' +
+    '<div class="flex gap-2 justify-end mt-2">' +
+      '<button type="button" class="bs-btn bs-btn-2" id="am-cancel">취소</button>' +
+      '<button type="button" class="bs-btn" id="am-save">저장</button></div>';
+  const root = showModal("관리자 계정", body, {});
+  const err = (m) => { $("#am-err", root).textContent = m || ""; };
+  root.addEventListener("input", (e) => {
+    if (e.target.id === "am-id") id = e.target.value;
+    if (e.target.id === "am-cur") cur = e.target.value;
+    if (e.target.id === "am-pw") pw = e.target.value;
+    if (e.target.id === "am-pw2") pw2 = e.target.value;
+    err("");
+  });
+  root.addEventListener("click", async (e) => {
+    const b = e.target.closest("button") || e.target;
+    if (b.id === "am-cancel") { closeModal(); return; }
+    if (b.id === "am-save") {
+      const cleanId = String(id || "").trim();
+      if (!cleanId) { err("아이디를 적어 주세요."); return; }
+      if (/\s/.test(cleanId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
+      if (!pwMatch(cur, S.dir.admin.pw)) { err("지금 비밀번호가 맞지 않아요."); return; }
+      if (pw || pw2) {
+        if (pw.length < 4) { err("새 비밀번호는 4자 이상으로 해 주세요."); return; }
+        if (pw !== pw2) { err("새 비밀번호가 서로 달라요."); return; }
+      }
+      try {
+        await dirCommit((fresh) => {
+          const low = cleanId.toLowerCase();
+          if (fresh.teachers.some((t) => t.loginId.toLowerCase() === low)) throw new Error("선생님이 쓰고 있는 아이디예요.");
+          if (Object.prototype.hasOwnProperty.call(fresh.index, low)) throw new Error("학생이 쓰고 있는 아이디예요.");
+          return Object.assign({}, fresh, { admin: { id: cleanId, pw: pw ? hashPw(pw) : fresh.admin.pw } });
+        });
+      } catch (er) { err(er && er.message ? er.message : "저장하지 못했어요."); return; }
+      closeModal(); render(); say("관리자 계정을 바꿨어요.");
+    }
+  });
+}
+
+/* 학생 아이디 목록 다시 만들기 (모든 학급을 훑어봅니다) */
+async function rebuildIndex() {
+  const rows = allClasses().map((x) => x.cls.row);
+  const idx = {}, counts = {};
+  say("학급을 훑어보는 중이에요…");
+  for (let i = 0; i < rows.length; i++) {
+    const loaded = await store.load(rows[i]);
+    const d = migrate(loaded.data);
+    counts[rows[i]] = d.students.length;
+    d.students.forEach((s) => {
+      if (!s.loginId) return;
+      const k = s.loginId.toLowerCase();
+      if (!idx[k]) idx[k] = rows[i];
+    });
+  }
+  try {
+    await dirCommit((fresh) => Object.assign({}, fresh, {
+      index: idx,
+      teachers: fresh.teachers.map((t) => Object.assign({}, t, {
+        classes: t.classes.map((c) => (counts[c.row] != null ? Object.assign({}, c, { students: counts[c.row] }) : c)),
+      })),
+    }));
+  } catch (e) { say("다시 만들지 못했어요."); return; }
+  render();
+  say("학생 " + fmt(Object.keys(idx).length) + "명의 아이디를 다시 담았어요.");
+}
+
+/* ══════════════════════════════════════════════════════════
    최상위 렌더 + 이벤트 위임(한 번만 등록)
    ══════════════════════════════════════════════════════════ */
+function loadingHtml(msg) {
+  return '<div class="bs" style="display:grid;place-items:center;padding:64px 24px;min-height:70vh;">' +
+    '<p style="color:var(--dim);">' + escapeHtml(msg || "불러오는 중") + '…</p></div>';
+}
+
 function render() {
   const root = document.getElementById("root");
-  if (!S.ready || !S.data) {
-    root.innerHTML = '<div class="bs" style="display:grid;place-items:center;padding:48px;"><p style="color:var(--dim);">불러오는 중…</p></div>';
+  if (!S.ready || !S.dir) { root.innerHTML = loadingHtml(S.busy); return; }
+  if (S.busy) { root.innerHTML = loadingHtml(S.busy); return; }
+  const sess = S.session;
+
+  /* 1) 로그인 전 */
+  if (!sess) {
+    root.innerHTML = S.authView === "signup" ? signupScreenHtml()
+      : S.authView === "sent" ? signupSentHtml()
+      : loginScreenHtml();
     return;
   }
-  /* 1) 선생님 계정이 아직 없으면 계정 만들기 */
-  if (!S.data.auth.teacherId) { root.innerHTML = setupScreenHtml(); return; }
-  /* 2) 로그인하지 않았으면 로그인 화면 */
-  if (!sessionValid(S.session, S.data)) {
-    if (S.session) { S.session = null; storeSession(null); }
+
+  /* 2) 관리자 — 학급을 열어 두었으면 그 학급 화면, 아니면 관리자 화면 */
+  if (sess.role === "admin") {
+    if (S.rowId && S.data) { root.innerHTML = S.preview ? studentAppHtml() : teacherAppHtml(); return; }
+    root.innerHTML = adminAppHtml();
+    return;
+  }
+
+  /* 3) 선생님 */
+  if (sess.role === "teacher") {
+    const t = findTeacher(sess.tid);
+    if (!t || t.status !== "approved") {
+      S.session = null; S.data = null; S.rowId = null; storeSession(null);
+      if (t) S.loginError = "지금은 쓸 수 없는 계정이에요. 관리자에게 문의해 주세요.";
+      root.innerHTML = loginScreenHtml();
+      return;
+    }
+    if (!S.rowId || !S.data) { root.innerHTML = classPickerHtml(t); return; }
+    root.innerHTML = S.preview ? studentAppHtml() : teacherAppHtml();
+    return;
+  }
+
+  /* 4) 학생 */
+  if (!S.data) { root.innerHTML = loadingHtml(); return; }
+  const me = S.data.students.find((x) => x.id === sess.studentId);
+  if (!me || !me.active || !me.loginId) {
+    S.session = null; S.data = null; S.rowId = null; storeSession(null);
+    S.loginError = "지금은 사용할 수 없는 계정이에요. 선생님께 말씀드리세요.";
     root.innerHTML = loginScreenHtml();
     return;
   }
-  /* 3) 학생으로 로그인했으면 학생 화면만 */
-  if (S.session.role === "student") { root.innerHTML = studentAppHtml(); return; }
-  /* 4) 선생님: 미리보기 중이면 학생 화면, 아니면 교사 화면 */
-  if (S.preview) { root.innerHTML = studentAppHtml(); return; }
-  root.innerHTML = teacherAppHtml();
+  root.innerHTML = studentAppHtml();
 }
 
 function bindGlobalEvents() {
@@ -2716,28 +3598,71 @@ function bindGlobalEvents() {
     /* 버튼 안의 아이콘/문구 span을 클릭해도 항상 버튼(또는 상호작용 요소) 자체를 대상으로 삼는다 */
     const t = e.target.closest("button, select, input, label") || e.target;
 
-    /* ── 계정 만들기 / 로그인 ── */
-    if (t.id === "su-go") {
-      const id = ($("#su-id") || {}).value || "";
-      const pw = ($("#su-pw") || {}).value || "";
-      const pw2 = ($("#su-pw2") || {}).value || "";
-      const errEl = $("#su-err");
-      const cleanId = id.trim();
-      if (!cleanId) { errEl.textContent = "아이디를 적어 주세요."; return; }
-      if (/\s/.test(cleanId)) { errEl.textContent = "아이디에는 띄어쓰기를 쓸 수 없어요."; return; }
-      if (pw.length < 4) { errEl.textContent = "비밀번호는 4자 이상으로 해 주세요."; return; }
-      if (pw !== pw2) { errEl.textContent = "비밀번호가 서로 달라요."; return; }
-      S.data = Object.assign({}, S.data, { auth: { teacherId: cleanId, teacherPw: pw } });
-      scheduleSave();
-      S.session = { role: "teacher" }; storeSession(S.session);
-      render(); say("선생님 계정을 만들었어요.");
-      return;
-    }
+    /* ── 로그인 / 가입 신청 ── */
     if (t.id === "lg-go") {
       tryLogin(($("#lg-id") || {}).value, ($("#lg-pw") || {}).value);
       return;
     }
+    if (t.id === "lg-signup") { S.authView = "signup"; S.authMsg = ""; S.loginError = ""; render(); return; }
+    if (t.id === "sg-back") { S.authView = "login"; S.authMsg = ""; render(); return; }
+    if (t.id === "sg-go") { submitSignup(); return; }
     if (t.id === "teacher-logout" || t.id === "stu-logout") { logout(); return; }
+
+    /* ── 학급 고르기 ── */
+    if (t.id === "go-classes") {
+      if (isAdmin()) {
+        S.rowId = null; S.data = null; S.preview = null;
+        if (S.session) { S.session = Object.assign({}, S.session, { row: null }); storeSession(S.session); }
+        render();
+      } else leaveClass();
+      return;
+    }
+    if (t.id === "cls-new" || t.id === "cls-new2") { openNewClassModal(); return; }
+    const clsOpen = t.getAttribute("data-cls-open");
+    if (clsOpen) { openClass(clsOpen); return; }
+    const clsRename = t.getAttribute("data-cls-rename");
+    if (clsRename) {
+      const found = allClasses().find((x) => x.cls.id === clsRename);
+      if (found) openClassRenameModal(found.cls);
+      return;
+    }
+    const clsDel = t.getAttribute("data-cls-del");
+    if (clsDel) {
+      const found = allClasses().find((x) => x.cls.id === clsDel);
+      if (found) openClassDeleteModal(found.cls);
+      return;
+    }
+
+    /* ── 관리자 화면 ── */
+    const aNav = t.getAttribute("data-anav");
+    if (aNav) { S.adminPage = aNav; render(); return; }
+    const admOk = t.getAttribute("data-adm-ok");
+    if (admOk) { setTeacherStatus(admOk, "approved"); return; }
+    const admNo = t.getAttribute("data-adm-no");
+    if (admNo) { setTeacherStatus(admNo, "rejected"); return; }
+    const admEdit = t.getAttribute("data-adm-edit");
+    if (admEdit) { const tt = findTeacher(admEdit); if (tt) openTeacherAdminModal(tt); return; }
+    const admOpen = t.getAttribute("data-adm-open");
+    if (admOpen) { openClass(admOpen); return; }
+    const admClsDel = t.getAttribute("data-adm-clsdel");
+    if (admClsDel) {
+      const found = allClasses().find((x) => x.cls.id === admClsDel);
+      if (found) openClassDeleteModal(found.cls);
+      return;
+    }
+    if (t.id === "adm-acc") { openAdminAccountModal(); return; }
+    if (t.id === "adm-signup-on" || t.id === "adm-signup-off") {
+      const on = t.id === "adm-signup-on";
+      dirCommit((fresh) => Object.assign({}, fresh, { signupOpen: on })).then(() => {
+        render(); say(on ? "가입 신청을 받아요." : "가입 신청을 받지 않아요.");
+      }).catch(() => say("바꾸지 못했어요."));
+      return;
+    }
+    if (t.id === "adm-reindex") { rebuildIndex(); return; }
+    if (t.id === "adm-backup") {
+      download("선생님학급명부-" + new Date().toISOString().slice(0, 10) + ".json", JSON.stringify(S.dir, null, 2));
+      return;
+    }
 
     /* ── 학생 화면 미리보기 (선생님 전용) ── */
     if (t.id === "go-preview") { if (!isTeacher()) return; S.preview = "pick"; S.sel = []; S.studentPage = "wallet"; render(); return; }
@@ -2950,7 +3875,7 @@ function bindGlobalEvents() {
     if (e.key !== "Enter") return;
     const id = e.target.id;
     if (id === "lg-id" || id === "lg-pw") { e.preventDefault(); const b = $("#lg-go"); if (b) b.click(); return; }
-    if (id === "su-id" || id === "su-pw" || id === "su-pw2") { e.preventDefault(); const b = $("#su-go"); if (b) b.click(); return; }
+    if (id && id.indexOf("sg-") === 0) { e.preventDefault(); const b = $("#sg-go"); if (b) b.click(); return; }
   });
 }
 
@@ -3142,37 +4067,93 @@ function payInterest() {
 /* ══════════════════════════════════════════════════════════
    시작
    ══════════════════════════════════════════════════════════ */
+/* 명부 읽기 — 처음이라면 예전에 쓰던 학급을 그대로 옮겨 옵니다 */
+async function bootDirectory() {
+  const loaded = await store.load(DIR_ROW);
+  if (loaded.data) { S.dir = migrateDir(loaded.data); dirStamp = loaded.stamp; return; }
+
+  const dir = migrateDir(null);
+  const legacy = await store.load(ROW);
+  if (legacy.data) {
+    const ld = migrate(legacy.data);
+    if (ld.auth && ld.auth.teacherId) {
+      dir.teachers.push({
+        id: uid(), loginId: ld.auth.teacherId, loginPw: hashPw(ld.auth.teacherPw),
+        name: ld.auth.teacherId, school: "", contact: "",
+        status: "approved", memo: "이 도구를 처음 쓰시던 계정이에요.",
+        createdAt: now(), decidedAt: now(),
+        classes: [{ id: uid(), name: ld.className, row: ROW, createdAt: now(), students: ld.students.length }],
+      });
+      ld.students.forEach((s) => { if (s.loginId) dir.index[s.loginId.toLowerCase()] = ROW; });
+    }
+  }
+  await store.save(DIR_ROW, dir);
+  S.dir = migrateDir(dir);
+  dirStamp = await store.stamp(DIR_ROW);
+}
+
+/* 지난 세션 이어받기 (같은 탭에서 새로고침한 경우) */
+async function resumeSession() {
+  const sess = loadSession();
+  if (!sess || !sess.role) return;
+
+  if (sess.role === "admin") {
+    S.session = { role: "admin" };
+    if (sess.row && classByRow(sess.row)) await openClass(sess.row);
+    return;
+  }
+  if (sess.role === "teacher") {
+    const t = findTeacher(sess.tid);
+    if (!t || t.status !== "approved") return;
+    S.session = { role: "teacher", tid: t.id, row: null };
+    const cls = sess.row ? t.classes.find((c) => c.row === sess.row) : null;
+    if (cls) await openClass(cls.row);
+    return;
+  }
+  if (sess.role === "student" && sess.row) {
+    S.busy = "불러오는 중"; S.session = sess; render();
+    const loaded = await store.load(sess.row);
+    S.busy = "";
+    S.rowId = sess.row; S.data = migrate(loaded.data); myStamp = loaded.stamp;
+    const me = S.data.students.find((x) => x.id === sess.studentId);
+    if (!me || !me.active || !me.loginId) { S.session = null; S.data = null; S.rowId = null; }
+  }
+}
+
 async function boot() {
   bindGlobalEvents();
   render(); // 로딩 화면
-  const loaded = await store.load();
-  myStamp = loaded.stamp;
-  S.data = migrate(loaded.data);
+  await bootDirectory();
+  S.ready = true;
 
-  /* 비밀번호를 잊었을 때의 탈출구 (파일 위쪽 상수) */
-  if (RESET_TEACHER_ACCOUNT) {
-    S.data = Object.assign({}, S.data, { auth: { teacherId: "", teacherPw: "" } });
+  /* 관리자 비밀번호를 잊었을 때의 탈출구 (파일 위쪽 상수) */
+  if (RESET_ADMIN) {
+    try { await dirCommit((fresh) => Object.assign({}, fresh, { admin: { id: ADMIN_BOOT.id, pw: ADMIN_BOOT.pw } })); } catch (e) { /* 무시 */ }
     storeSession(null);
-    scheduleSave();
   }
 
-  /* 지난 세션 이어받기 (같은 탭에서 새로고침한 경우) */
-  const sess = loadSession();
-  S.session = sessionValid(sess, S.data) ? sess : null;
+  await resumeSession();
   if (!S.session) storeSession(null);
-
-  S.ready = true;
   render();
 
   /* 공용 서버(Supabase) 모드일 때만: 다른 기기의 변경을 주기적으로 가져오기 */
   if (store.mode === "server") {
     setInterval(async () => {
-      if (saveTimer) return; // 저장 중이면 건너뜀
+      if (saveTimer || dirBusy || S.busy) return; // 저장 중이면 건너뜀
       try {
-        const s = await store.stamp();
-        if (s && s !== myStamp) {
-          const loaded2 = await store.load();
-          if (loaded2.data) { myStamp = loaded2.stamp; S.data = migrate(loaded2.data); render(); }
+        if (S.rowId && S.data) {
+          const s = await store.stamp(S.rowId);
+          if (s && s !== myStamp) {
+            const loaded2 = await store.load(S.rowId);
+            if (loaded2.data) { myStamp = loaded2.stamp; S.data = migrate(loaded2.data); render(); }
+          }
+        }
+        if (S.session && S.session.role === "admin" && !S.rowId) {
+          const s2 = await store.stamp(DIR_ROW);
+          if (s2 && s2 !== dirStamp) {
+            const loaded3 = await store.load(DIR_ROW);
+            if (loaded3.data) { dirStamp = loaded3.stamp; S.dir = migrateDir(loaded3.data); render(); }
+          }
         }
       } catch (e) { /* 네트워크 오류는 조용히 무시 */ }
     }, 5000);

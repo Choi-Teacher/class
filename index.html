@@ -6,6 +6,21 @@
 <title>Choi's · 학급 운영 도구</title>
 <meta name="theme-color" content="#F7F7F8" />
 <meta name="robots" content="noindex, nofollow" />
+
+<!-- ── 앱으로 설치하기 (PWA) ─────────────────────────────────
+     manifest.webmanifest · sw.js · icons/ 폴더가 index.html 과
+     같은 곳에 있어야 «앱 설치» 가 뜹니다.                      -->
+<link rel="manifest" href="manifest.webmanifest" />
+<meta name="application-name" content="Choi's" />
+<meta name="mobile-web-app-capable" content="yes" />
+<!-- 아이폰 · 아이패드 -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Choi's" />
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+<link rel="icon" href="icons/icon-192.png" sizes="192x192" />
+<link rel="icon" href="icons/favicon.svg" type="image/svg+xml" />
+
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/pretendard@1.3.9/dist/web/variable/pretendardvariable.min.css" />
 <style>
 /* ══════════════════════════════════════════════════════════
@@ -22,16 +37,25 @@
 }
 *{box-sizing:border-box;}
 html,body,#root{margin:0;padding:0;min-height:100%;}
+html{-webkit-text-size-adjust:100%; text-size-adjust:100%;}
 body{
   background:var(--bg); color:var(--ink); font-size:15px;
   font-family:Pretendard,-apple-system,"Apple SD Gothic Neo","Malgun Gothic","Segoe UI",system-ui,sans-serif;
   -webkit-font-smoothing:antialiased;
+  /* 한글은 글자 단위가 아니라 낱말 단위로 줄바꿈해야 좁은 칸에서 깨지지 않아요 */
+  word-break:keep-all; overflow-wrap:break-word;
+  overflow-x:hidden;                       /* 어디선가 삐져나가도 가로 스크롤은 막기 */
 }
 button,input,textarea,select{font-family:inherit;}
 button{cursor:pointer;}
 :focus-visible{outline:2px solid var(--ink);outline-offset:2px;}
 
 .bs{background:var(--bg); color:var(--ink); min-height:100vh;}
+@supports (min-height:100dvh){ .bs{min-height:100dvh;} }
+
+/* 표를 감싸는 가로 스크롤 칸 */
+.bs-scroll{overflow-x:auto; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain;}
+.bs-scroll-hint{display:none;}
 .bs-num{font-variant-numeric:tabular-nums;}
 
 /* ── 유틸리티 (레이아웃) ─────────────────────────────────── */
@@ -64,17 +88,6 @@ button{cursor:pointer;}
 /* 사이드바 */
 .bs-side{width:212px;flex-shrink:0;}
 @media (max-width:1060px){.bs-side{width:176px;}}
-@media (max-width:760px){
-  .bs-shell{gap:12px!important;padding-left:10px!important;padding-right:10px!important;}
-  .bs-side{width:50px;}
-  .bs-lbl{display:none;}
-  .bs-nav button,.bs-group{justify-content:center;padding:12px 0;}
-  .bs-nav .bs-sub{padding-left:0;}
-  .bs-caret{display:none;}
-  .bs-badge-n{margin-left:0;font-size:0;min-width:8px;width:8px;height:8px;padding:0;
-    position:absolute;top:8px;right:7px;}
-  .bs-nav>button,.bs-nav>div>button{position:relative;}
-}
 .bs-nav{display:flex;flex-direction:column;gap:2px;}
 .bs-nav button{display:flex;align-items:center;gap:10px;border:0;background:none;border-radius:12px;
   padding:11px 13px;font-size:15px;color:var(--ink);text-align:left;width:100%;}
@@ -102,16 +115,6 @@ button{cursor:pointer;}
 .bs-stu-pw{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px;
   font-size:13.5px;color:var(--dim);text-align:center;width:100%;}
 .bs-stu-pw:hover{background:var(--soft);color:var(--ink);}
-
-@media (max-width:760px){
-  .bs-stu-shell{flex-direction:column;gap:12px!important;}
-  .bs-stu-side{width:100%;position:static;flex-direction:column;}
-  .bs-stu-nav{flex-direction:row;overflow-x:auto;padding:6px;}
-  .bs-stu-nav button{flex-shrink:0;padding:10px 14px;}
-  .bs-stu-nav .bs-lbl{display:inline;}
-  .bs-stu-nav .bs-nav-ico{display:none;}
-  .bs-stu-pw{display:none;}
-}
 
 /* 카드 */
 .bs-card{background:var(--card);border-radius:var(--r);border:1px solid var(--line);}
@@ -244,6 +247,144 @@ button{cursor:pointer;}
   padding:9px 16px;text-align:center;}
 
 @media (prefers-reduced-motion:reduce){.bs *{animation-duration:.001s!important;transition:none!important;}}
+
+/* ══════════════════════════════════════════════════════════
+   앱 설치 안내 띠
+   ══════════════════════════════════════════════════════════ */
+.bs-install{position:fixed;left:50%;transform:translateX(-50%);z-index:60;
+  bottom:calc(16px + env(safe-area-inset-bottom));
+  display:none;align-items:center;gap:10px;
+  width:min(440px,calc(100vw - 24px));
+  background:var(--dark);color:#fff;border-radius:16px;padding:11px 12px 11px 16px;
+  box-shadow:0 12px 32px rgba(0,0,0,.26);animation:bs-fade .2s ease-out;}
+.bs-install[data-show="true"]{display:flex;}
+.bs-install-txt{font-size:13.5px;line-height:1.45;flex:1;min-width:0;}
+.bs-install-txt b{font-weight:700;}
+.bs-install-txt span{display:block;color:#B9B9C0;font-size:12px;margin-top:1px;}
+.bs-install-go{border:0;background:#fff;color:var(--dark);border-radius:999px;
+  padding:9px 15px;font-size:13.5px;font-weight:700;flex-shrink:0;white-space:nowrap;}
+.bs-install-x{border:0;background:none;color:#8C8C93;font-size:19px;line-height:1;
+  padding:6px 4px;flex-shrink:0;}
+.bs-ios-step{display:flex;gap:11px;align-items:flex-start;padding:11px 0;}
+.bs-ios-step i{flex-shrink:0;width:23px;height:23px;border-radius:50%;background:var(--soft);
+  color:var(--ink);font-size:12.5px;font-weight:700;font-style:normal;display:grid;place-items:center;margin-top:1px;}
+
+/* ══════════════════════════════════════════════════════════
+   모바일 (760px 이하)
+   · 왼쪽 세로 메뉴 → 위쪽 가로 탭 띠
+   · 표 → 옆으로 미는 표 (글자가 세로로 쪼개지지 않게)
+   · 모달 → 아래에서 올라오는 시트
+   · 노치·홈바를 피하는 안전 여백
+   ══════════════════════════════════════════════════════════ */
+@media (max-width:760px){
+
+  /* ── 상단 바 ───────────────────────────────────────── */
+  .bs-top{padding-top:env(safe-area-inset-top);}
+  .bs-top>div{
+    padding-left:calc(14px + env(safe-area-inset-left))!important;
+    padding-right:calc(14px + env(safe-area-inset-right))!important;
+    padding-top:10px!important;padding-bottom:10px!important;gap:10px!important;}
+  .bs-mark{font-size:18px;flex-shrink:0;}
+  .bs-top-acts{flex-wrap:nowrap;overflow-x:auto;min-width:0;
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  .bs-top-acts::-webkit-scrollbar{display:none;}
+  .bs-top-acts>*{flex:0 0 auto;}
+  .bs-top-acts .bs-pill{padding:7px 12px;font-size:13px;white-space:nowrap;}
+
+  /* ── 본문 껍데기 ──────────────────────────────────── */
+  .bs-shell{flex-direction:column!important;gap:0!important;
+    padding-left:calc(14px + env(safe-area-inset-left))!important;
+    padding-right:calc(14px + env(safe-area-inset-right))!important;
+    padding-top:14px!important;padding-bottom:28px!important;}
+
+  /* 사이드바 자체는 «없는 셈» 치고 그 안의 것들을 바로 펼칩니다 */
+  .bs-side{display:contents;}
+
+  /* 세로 메뉴 → 옆으로 미는 탭 띠 (상단 바 바로 아래에 붙어 따라옵니다) */
+  .bs-nav{flex-direction:row;gap:6px;overflow-x:auto;overflow-y:hidden;
+    position:sticky;top:var(--bs-topbar,56px);z-index:35;
+    margin:-14px -14px 14px;padding:11px 14px;background:var(--bg);
+    scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain;
+    box-shadow:0 8px 10px -10px rgba(0,0,0,.16);}
+  .bs-nav::-webkit-scrollbar{display:none;}
+  .bs-nav>div{display:contents;}          /* «경제» 묶음도 한 줄로 펼치기 */
+  .bs-nav button,.bs-group{
+    width:auto!important;flex:0 0 auto;white-space:nowrap;
+    border:1px solid var(--line);background:var(--card);
+    border-radius:999px;padding:9px 15px!important;font-size:14px;gap:7px;}
+  .bs-nav button:hover,.bs-group:hover{background:var(--card);}
+  .bs-nav button[data-on="true"],
+  .bs-nav button[data-on="true"]:hover{background:var(--ink);color:#fff;border-color:var(--ink);}
+  .bs-nav .bs-sub{padding-left:15px!important;font-size:14px;color:var(--ink);}
+  .bs-caret{margin-left:0!important;}
+  .bs-badge-n{margin-left:1px;}
+
+  /* ── 학생 화면 ────────────────────────────────────── */
+  .bs-stu-shell{flex-direction:column!important;gap:0!important;}
+  .bs-stu-side{display:contents;}
+  /* 사이드바를 풀어헤쳤으니 위아래 차례를 다시 정해 줍니다 */
+  .bs-stu-me{order:0;margin-bottom:14px;}
+  .bs-stu-nav{order:1;border:0;background:var(--bg);border-radius:0;}
+  .bs-stu-main{order:2;}
+  .bs-stu-pw{order:3;display:block;margin-top:20px;}
+  .bs-stu-nav button[data-on="true"]{background:var(--ink);color:#fff;}
+  .bs-stu-nav .bs-nav-ico{display:none;}
+
+  /* ── 표: 좁아도 글자가 세로로 쪼개지지 않게 옆으로 밀어 봅니다 ── */
+  .bs-scroll>.bs-tbl{min-width:600px;}
+  .bs-tbl thead th{padding:11px 12px;}
+  .bs-tbl tbody td{padding:13px 12px;}
+  .bs-scroll-hint{display:block;padding:9px 16px 13px;font-size:12.5px;
+    color:var(--mute);text-align:center;}
+  /* 시간표는 좁은 화면에도 그대로 들어갑니다 */
+  .bs-tt input{padding:13px 2px;}
+
+  /* ── 글씨 크기: 16px 미만이면 아이폰이 입력할 때 화면을 확대해 버려요 ── */
+  .bs-in,.bs-ta,.bs-tt input,input,select,textarea{font-size:16px;}
+  .bs-in{padding:12px 13px;}
+
+  /* ── 제목 줄 ─────────────────────────────────────── */
+  .bs-card-pad{padding:17px;}
+
+  /* ── 아래 액션 바: 칩을 줄바꿈 대신 옆으로 밀게 해 높이를 줄입니다 ── */
+  .bs-dock{padding-bottom:env(safe-area-inset-bottom);}
+  .bs-dock>div{padding-left:14px!important;padding-right:14px!important;
+    padding-top:12px!important;padding-bottom:12px!important;}
+  #dock-amounts,#dock-reasons{flex-wrap:nowrap!important;overflow-x:auto;
+    padding-bottom:2px;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
+  #dock-amounts::-webkit-scrollbar,#dock-reasons::-webkit-scrollbar{display:none;}
+  #dock-amounts>*,#dock-reasons>*{flex:0 0 auto;}
+  #dock-amt-input{width:104px!important;}
+  #dock-reason-input{width:150px!important;max-width:150px!important;}
+
+  /* ── 모달: 아래에서 올라오는 시트 ─────────────────── */
+  .bs-veil{padding:0;place-items:end center;align-items:end;}
+  .bs-sheet{max-width:none!important;border-radius:20px 20px 0 0;
+    max-height:92vh;animation:bs-sheet-up .2s cubic-bezier(.2,.9,.3,1);}
+  .bs-sheet>div:last-child{padding-bottom:calc(24px + env(safe-area-inset-bottom))!important;}
+  .bs-sheet .px-6{padding-left:18px!important;padding-right:18px!important;}
+  .bs-sheet .py-5{padding-top:16px!important;padding-bottom:16px!important;}
+  .bs-sheet h3{font-size:17px;}
+  #bs-modal-close{white-space:nowrap;flex-shrink:0;}
+
+  .bs-toast{bottom:calc(20px + env(safe-area-inset-bottom));}
+
+  /* 학생 카드가 3~4칸으로 예쁘게 떨어지도록 살짝 좁히기 */
+  .gap-x-4{column-gap:11px;} .gap-y-6{row-gap:19px;}
+  .bs-stu-name{font-size:13px;} .bs-stu-bal{font-size:12px;}
+}
+@supports (max-height:100dvh){
+  @media (max-width:760px){ .bs-sheet{max-height:92dvh;} }
+}
+@keyframes bs-sheet-up{from{transform:translateY(28px);}}
+
+/* 아주 좁은 화면 (아이폰 SE 등) */
+@media (max-width:380px){
+  .bs-mark{font-size:17px;}
+  .bs-top-acts .bs-pill{padding:7px 10px;font-size:12.5px;}
+  .bs-shell{padding-left:11px!important;padding-right:11px!important;}
+  .bs-nav{margin-left:-11px;margin-right:-11px;padding-left:11px;padding-right:11px;}
+}
 </style>
 </head>
 <body>
@@ -1190,7 +1331,7 @@ function classPickerHtml(t) {
   let inner = '<div class="bs" style="min-height:100vh;">' +
     '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:900px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
-      '<div class="flex items-center gap-2">' +
+      '<div class="flex items-center gap-2 bs-top-acts">' +
         '<span class="bs-pill" style="cursor:default;">' + escapeHtml(t.name || t.loginId) + ' 선생님</span>' +
         '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
       '</div></div></div>' +
@@ -2166,7 +2307,7 @@ function activityTableHtml() {
   const rows = activityRows();
   const students = S.data.students;
   if (!rows.length) return Empty("기록이 없어요.");
-  let html = '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+  let html = '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
     '<thead><tr><th style="width:108px;">일시</th><th style="width:140px;">학생</th><th>내용</th><th class="bs-r" style="width:120px;">금액</th></tr></thead><tbody>';
   rows.slice(0, 300).forEach((e) => {
     const st = students.find((s) => s.id === e.studentId);
@@ -2212,7 +2353,7 @@ function renderStorePage() {
       '<button type="button" class="bs-btn" id="st-new2">아이템 만들기</button>' +
       '<button type="button" class="bs-btn bs-btn-2" id="st-sample">예시로 채우기</button>');
   } else {
-    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
       '<thead><tr><th style="width:92px;">분류</th><th>아이템</th><th class="bs-r" style="width:130px;">가격</th><th style="width:96px;">재고</th><th style="width:150px;"></th></tr></thead><tbody>';
     grouped.forEach(([cat, list]) => {
       list.forEach((it, idx) => {
@@ -2275,7 +2416,7 @@ function renderFinancePage() {
   if (!students.length) {
     html += Empty("학급 홈에서 명단을 먼저 만들어 주세요.");
   } else {
-    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
       '<thead><tr><th>학생</th><th class="bs-r">쓸 수 있는 돈</th><th class="bs-r">예금</th><th class="bs-r">주식</th><th class="bs-r">합계</th></tr></thead><tbody>';
     students.forEach((s) => {
       const sv = stockAssetOf(s).val;
@@ -2304,7 +2445,7 @@ function renderJobsPage() {
       '<button type="button" class="bs-btn" id="job-new2">직업 만들기</button>' +
       '<button type="button" class="bs-btn bs-btn-2" id="job-sample">예시로 채우기</button>');
   } else {
-    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
       '<thead><tr><th style="width:170px;">직업명</th><th class="bs-r" style="width:140px;">급여</th><th>구성원</th><th style="width:240px;"></th></tr></thead><tbody>';
     jobs.forEach((j) => {
       html += '<tr><td><div style="font-weight:600;">' + escapeHtml(j.name) + '</div>' +
@@ -2347,7 +2488,7 @@ function renderQuestsPage() {
   } else if (!shown.length) {
     html += Empty("이 상태의 퀘스트가 없어요.");
   } else {
-    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
       '<thead><tr><th style="width:88px;">상태</th><th>퀘스트 제목</th><th class="bs-r" style="width:130px;">보상</th><th style="width:150px;">완료</th><th style="width:190px;"></th></tr></thead><tbody>';
     shown.forEach((q) => {
       const total = students.length || 1;
@@ -2376,7 +2517,7 @@ function timetableHtml(readOnly) {
     readOnly ? "" :
       '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="tt-minus" ' + (tt.periods <= 3 ? 'disabled' : '') + '>교시 －</button>' +
       '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="tt-plus" ' + (tt.periods >= 8 ? 'disabled' : '') + '>교시 ＋</button>');
-  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tt">' +
+  html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tt">' +
     '<thead><tr><th style="width:52px;"></th>' + DAYS.map((dd) => '<th>' + dd + '</th>').join("") + '</tr></thead><tbody>';
   for (let p = 0; p < tt.periods; p++) {
     html += '<tr><th>' + (p + 1) + '</th>';
@@ -2428,7 +2569,7 @@ function renderStocksPage() {
   }
 
   /* 종목 표 */
-  html += '<div class="bs-card mb-5" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+  html += '<div class="bs-card mb-5" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
     '<thead><tr><th style="width:190px;">종목</th><th class="bs-r" style="width:120px;">현재가</th>' +
     '<th style="width:150px;">등락</th><th style="width:90px;">흐름</th>' +
     '<th style="width:130px;">학생 보유</th><th style="width:200px;"></th></tr></thead><tbody>';
@@ -2456,7 +2597,7 @@ function renderStocksPage() {
   if (!investors.length) {
     html += Empty("아직 주식을 산 학생이 없어요.");
   } else {
-    html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+    html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
       '<thead><tr><th style="width:150px;">학생</th><th>보유 종목</th>' +
       '<th class="bs-r" style="width:120px;">투자원금</th><th class="bs-r" style="width:120px;">평가금액</th>' +
       '<th class="bs-r" style="width:130px;">손익</th></tr></thead><tbody>';
@@ -2468,7 +2609,8 @@ function renderStocksPage() {
       const tags = Object.keys(s.holdings).map((id) => {
         const st = d.stocks.find((x) => x.id === id);
         if (!st) return "";
-        return '<span class="bs-badge" style="background:var(--soft);color:var(--ink);border-radius:999px;padding:5px 12px;">' +
+        return '<span class="bs-badge" style="background:var(--soft);color:var(--ink);border-radius:999px;' +
+          'padding:5px 12px;white-space:nowrap;">' +
           escapeHtml(st.name) + ' <b class="bs-num">' + s.holdings[id].shares + '주</b></span>';
       }).join("");
       html += '<tr>' +
@@ -2529,7 +2671,7 @@ function renderAccountsPage() {
       (S.showPw ? "비밀번호 가리기" : "비밀번호 보기") + '</button>' +
   '</div>';
 
-  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+  html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
     '<thead><tr><th style="width:170px;">학생</th><th style="width:150px;">아이디</th>' +
     '<th style="width:130px;">비밀번호</th><th style="width:120px;">로그인</th><th style="width:110px;"></th></tr></thead><tbody>';
   students.forEach((s) => {
@@ -2710,6 +2852,15 @@ function renderSettingsPage() {
     '</div></div>';
 
   html += '<div class="bs-card bs-card-pad">' +
+    '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">앱으로 설치</div>' +
+    '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">' +
+      '홈 화면에 아이콘을 만들어 두면 주소를 치지 않고 바로 열 수 있어요. ' +
+      '선생님 휴대폰과 학생 태블릿 모두에서 됩니다.</p>' +
+    '<div class="flex gap-2 mt-3 flex-wrap">' +
+      '<button type="button" class="bs-btn bs-btn-2 bs-btn-sm" id="set-install">홈 화면에 추가하기</button>' +
+    '</div></div>';
+
+  html += '<div class="bs-card bs-card-pad">' +
     '<div style="font-size:15px;font-weight:700;margin-bottom:14px;">백업</div>' +
     '<p style="font-size:13.5px;color:var(--dim);line-height:1.6;">학기 말이나 기기를 옮길 때 파일로 내려두면 안전해요.</p>' +
     '<div class="flex gap-2 mt-3 flex-wrap">' +
@@ -2781,7 +2932,7 @@ function studentAppHtml() {
   /* ── 상단 바 (브랜드 + 학생 정보 + 로그아웃) ── */
   html += '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-3" style="max-width:1080px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
-      '<div class="flex items-center gap-2">' +
+      '<div class="flex items-center gap-2 bs-top-acts">' +
         (previewing
           ? '<button type="button" class="bs-pill" id="preview-pick">다른 학생</button>' +
             '<button type="button" class="bs-pill" id="preview-exit">미리보기 끝내기</button>'
@@ -3155,7 +3306,7 @@ function teacherAppHtml() {
     (adminView ? '<div class="bs-note">관리자로 열어 본 학급이에요 · 여기서 고치면 실제로 반영돼요</div>' : '') +
     '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:1240px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
-      '<div class="flex items-center gap-2">' +
+      '<div class="flex items-center gap-2 bs-top-acts">' +
         '<button type="button" class="bs-pill" id="go-classes">' +
           (adminView ? "관리자 화면으로" : escapeHtml(d.className) + " ▾") + '</button>' +
         '<button type="button" class="bs-pill" id="go-preview">학생 화면 미리보기</button>' +
@@ -3215,7 +3366,7 @@ function adminTeachersPage() {
   const list = S.dir.teachers.slice().sort((a, b) => (a.name || a.loginId).localeCompare(b.name || b.loginId, "ko"));
   let html = PageHead("선생님", "가입한 선생님과 상태를 관리해요.", "");
   if (!list.length) return html + Empty("아직 가입한 선생님이 없어요.");
-  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+  html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
     '<thead><tr><th style="width:180px;">선생님</th><th style="width:130px;">아이디</th>' +
     '<th style="width:180px;">학교 · 연락처</th><th style="width:90px;">학급</th>' +
     '<th style="width:100px;">상태</th><th style="width:90px;"></th></tr></thead><tbody>';
@@ -3237,7 +3388,7 @@ function adminClassesPage() {
   const list = allClasses();
   let html = PageHead("학급", "모든 선생님의 학급이에요. «열기»를 누르면 그 학급 화면을 그대로 볼 수 있어요.", "");
   if (!list.length) return html + Empty("아직 만들어진 학급이 없어요.");
-  html += '<div class="bs-card" style="overflow:hidden;"><div style="overflow-x:auto;"><table class="bs-tbl">' +
+  html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
     '<thead><tr><th style="width:200px;">학급</th><th style="width:150px;">담임</th>' +
     '<th style="width:90px;">학생</th><th style="width:120px;">만든 날</th><th style="width:150px;"></th></tr></thead><tbody>';
   list.sort((a, b) => a.cls.name.localeCompare(b.cls.name, "ko")).forEach((x) => {
@@ -3317,7 +3468,7 @@ function adminAppHtml() {
   return '<div class="bs">' +
     '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:1240px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
-      '<div class="flex items-center gap-2">' +
+      '<div class="flex items-center gap-2 bs-top-acts">' +
         '<span class="bs-pill" style="cursor:default;">관리자 · ' + escapeHtml(S.dir.admin.id) + '</span>' +
         '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
       '</div></div></div>' +
@@ -4158,6 +4309,183 @@ async function boot() {
       } catch (e) { /* 네트워크 오류는 조용히 무시 */ }
     }, 5000);
   }
+}
+
+/* ══════════════════════════════════════════════════════════
+   모바일 다듬기 · 앱으로 설치하기
+   ══════════════════════════════════════════════════════════ */
+
+const isMobile = () => window.matchMedia("(max-width:760px)").matches;
+
+/* 상단 바 높이를 재서, 따라다니는 탭 띠가 그 바로 아래에 붙게 합니다 */
+function syncTopbar() {
+  const top = document.querySelector(".bs-top");
+  const h = top ? Math.round(top.getBoundingClientRect().height) : 0;
+  document.documentElement.style.setProperty("--bs-topbar", h + "px");
+}
+
+/* 옆으로 밀어야 다 보이는 표에만 안내 한 줄을 붙입니다 */
+function markScrollables() {
+  document.querySelectorAll(".bs-scroll").forEach((el) => {
+    const nx = el.nextElementSibling;
+    const hint = nx && nx.classList && nx.classList.contains("bs-scroll-hint") ? nx : null;
+    const need = isMobile() && el.scrollWidth - el.clientWidth > 8;
+    if (need && !hint) {
+      const d = document.createElement("div");
+      d.className = "bs-scroll-hint";
+      d.textContent = "표를 옆으로 밀면 나머지 칸이 보여요";
+      el.insertAdjacentElement("afterend", d);
+    } else if (!need && hint) {
+      hint.remove();
+    }
+  });
+}
+
+function afterRender() {
+  syncTopbar();
+  markScrollables();
+  syncInstallBar();
+}
+
+/* 화면을 다시 그릴 때마다 위 정리를 자동으로 한 번 더 */
+const renderCore = render;
+render = function () { renderCore(); afterRender(); };
+
+const showModalCore = showModal;
+showModal = function (title, bodyHtml, opts) {
+  const body = showModalCore(title, bodyHtml, opts);
+  markScrollables();
+  return body;
+};
+
+let resizeTimer = null;
+["resize", "orientationchange"].forEach((ev) => {
+  window.addEventListener(ev, () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(afterRender, 120);
+  });
+});
+
+/* ── 앱으로 설치하기 ──────────────────────────────────── */
+const INSTALL_SNOOZE = "choisclass:install-snooze";
+let installEvent = null;      // 안드로이드·크롬이 건네주는 설치 사건
+
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches ||
+         window.matchMedia("(display-mode: fullscreen)").matches ||
+         window.navigator.standalone === true;
+}
+function isApple() {
+  const ua = navigator.userAgent || "";
+  return /iPad|iPhone|iPod/.test(ua) ||
+         (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+}
+function installSnoozed() {
+  try {
+    const t = Number(window.localStorage.getItem(INSTALL_SNOOZE) || 0);
+    return !!t && now() - t < 14 * 24 * 60 * 60 * 1000;   // 닫으면 2주 동안 쉬어요
+  } catch (e) { return false; }
+}
+function installAvailable() {
+  if (isStandalone()) return false;                 // 이미 앱으로 열려 있음
+  return !!installEvent || (isApple() && isMobile());
+}
+
+function buildInstallBar() {
+  if (document.getElementById("bs-install")) return;
+  const bar = document.createElement("div");
+  bar.id = "bs-install";
+  bar.className = "bs-install";
+  bar.innerHTML =
+    '<div class="bs-install-txt"><b>앱으로 설치하기</b>' +
+      '<span>주소를 치지 않고 홈 화면에서 바로 열어요</span></div>' +
+    '<button type="button" class="bs-install-go" id="bs-install-go">설치</button>' +
+    '<button type="button" class="bs-install-x" id="bs-install-x" aria-label="닫기">×</button>';
+  document.body.appendChild(bar);
+  document.getElementById("bs-install-go").addEventListener("click", runInstall);
+  document.getElementById("bs-install-x").addEventListener("click", () => {
+    try { window.localStorage.setItem(INSTALL_SNOOZE, String(now())); } catch (e) { /* 무시 */ }
+    syncInstallBar();
+  });
+}
+
+function syncInstallBar() {
+  buildInstallBar();
+  const bar = document.getElementById("bs-install");
+  if (bar) bar.setAttribute("data-show", installAvailable() && !installSnoozed() ? "true" : "false");
+}
+
+async function runInstall() {
+  if (installEvent) {
+    const p = installEvent;
+    installEvent = null;
+    try { p.prompt(); await p.userChoice; } catch (e) { /* 무시 */ }
+    syncInstallBar();
+    return;
+  }
+  showAppleGuide();
+}
+
+/* 아이폰·아이패드는 설치 단추가 없어서 «공유 → 홈 화면에 추가» 를 안내합니다 */
+function showAppleGuide() {
+  const share =
+    '<svg width="15" height="18" viewBox="0 0 15 18" fill="none" style="vertical-align:-3px;">' +
+      '<path d="M7.5 1.2v10M7.5 1.2 4.4 4.4M7.5 1.2l3.1 3.2" stroke="#2F62D8" stroke-width="1.6" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/>' +
+      '<path d="M3.4 7.2H2.2v9.1h10.6V7.2h-1.2" stroke="#2F62D8" stroke-width="1.6" ' +
+        'stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  showModal("홈 화면에 추가하기",
+    '<p style="font-size:14px;color:var(--dim);line-height:1.65;margin:0;">' +
+      '<b style="color:var(--ink);">Safari</b> 로 열고 아래 순서대로 하면 앱처럼 쓸 수 있어요.</p>' +
+    '<div class="mt-4" style="border-top:1px solid var(--line);">' +
+      '<div class="bs-ios-step"><i>1</i><div>화면 아래쪽 가운데의 <b>공유</b> 단추 ' + share + ' 를 누릅니다.</div></div>' +
+      '<div class="bs-ios-step" style="border-top:1px solid var(--line);"><i>2</i>' +
+        '<div>목록을 올려서 <b>홈 화면에 추가</b> 를 고릅니다.</div></div>' +
+      '<div class="bs-ios-step" style="border-top:1px solid var(--line);"><i>3</i>' +
+        '<div>오른쪽 위 <b>추가</b> 를 누르면 끝이에요.</div></div>' +
+    '</div>' +
+    '<p style="font-size:13px;color:var(--mute);line-height:1.6;margin:14px 0 0;">' +
+      '크롬·네이버 앱에서는 이 항목이 없을 수 있어요. 그럴 때는 Safari 로 다시 열어 주세요.</p>' +
+    '<div class="flex justify-end mt-5"><button type="button" class="bs-btn" id="ios-ok">알겠어요</button></div>');
+  const ok = document.getElementById("ios-ok");
+  if (ok) ok.addEventListener("click", closeModal);
+}
+
+window.addEventListener("beforeinstallprompt", (e) => {
+  e.preventDefault();
+  installEvent = e;
+  syncInstallBar();
+});
+window.addEventListener("appinstalled", () => {
+  installEvent = null;
+  try { window.localStorage.removeItem(INSTALL_SNOOZE); } catch (e) { /* 무시 */ }
+  syncInstallBar();
+  say("설치했어요 · 이제 홈 화면에서 바로 열 수 있어요");
+});
+
+/* 설정 화면의 «앱으로 설치» 단추 (안내 띠를 닫았어도 여기서 다시 설치할 수 있어요) */
+document.addEventListener("click", (e) => {
+  const t = e.target.closest ? e.target.closest("#set-install") : null;
+  if (!t) return;
+  if (isStandalone()) { say("이미 앱으로 열려 있어요"); return; }
+  runInstall();
+});
+
+/* ── 오프라인·빠른 실행을 맡는 서비스 워커 ─────────────── */
+if ("serviceWorker" in navigator && location.protocol.indexOf("http") === 0) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("sw.js").then((reg) => {
+      reg.addEventListener("updatefound", () => {
+        const fresh = reg.installing;
+        if (!fresh) return;
+        fresh.addEventListener("statechange", () => {
+          if (fresh.state === "installed" && navigator.serviceWorker.controller) {
+            say("새 버전이 나왔어요 · 새로고침하면 바뀝니다");
+          }
+        });
+      });
+    }).catch(() => { /* 설치가 안 돼도 사이트는 그대로 굴러갑니다 */ });
+  });
 }
 
 document.addEventListener("DOMContentLoaded", boot);

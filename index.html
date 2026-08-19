@@ -184,6 +184,10 @@ button{cursor:pointer;}
 .bs-in{border:1px solid var(--line);background:var(--card);border-radius:12px;padding:11px 13px;font-size:15px;
   font-family:inherit;color:var(--ink);width:100%;}
 .bs-in:focus{border-color:var(--ink);outline:none;}
+/* 고르는 칸도 적는 칸과 같은 모양으로 */
+select.bs-in{appearance:none;-webkit-appearance:none;cursor:pointer;padding-right:34px;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='7'%3E%3Cpath d='M1 1l4.5 4.5L10 1' fill='none' stroke='%238C8C93' stroke-width='1.7' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 13px center;}
 .bs-ta{border:1px solid var(--line);background:var(--card);border-radius:14px;padding:13px;font-size:15px;
   font-family:inherit;color:var(--ink);width:100%;resize:vertical;line-height:1.7;}
 .bs-ta:focus{border-color:var(--ink);outline:none;}
@@ -638,7 +642,7 @@ function escapeHtml(s) {
 const DEFAULT_DIR = {
   version: 1,
   admin: { id: "", pw: "" },
-  teachers: [],      // { id, loginId, loginPw, name, school, contact, status, memo, createdAt, decidedAt, classes:[] }
+  teachers: [],      // { id, loginId, loginPw, status, memo, createdAt, decidedAt, classes:[] }
   index: {},         // 학생 아이디(소문자) → 그 학생이 속한 학급 칸
   signupOpen: true,  // 선생님 가입 신청 받기
 };
@@ -654,9 +658,7 @@ function migrateDir(raw) {
     id: t.id || uid(),
     loginId: String(t.loginId || "").trim(),
     loginPw: String(t.loginPw || ""),
-    name: String(t.name || ""),
-    school: String(t.school || ""),
-    contact: String(t.contact || ""),
+    /* 성함·학교·연락처는 받지 않습니다 — 예전 자료에 남아 있으면 여기서 지워집니다 */
     status: T_STATUS.indexOf(t.status) >= 0 ? t.status : "pending",
     memo: String(t.memo || ""),
     createdAt: Number(t.createdAt) || 0,
@@ -1132,25 +1134,35 @@ function loginScreenHtml() {
     '</div>');
 }
 
-/* 선생님 가입 신청 화면 */
+/* 선생님 가입 신청 화면
+   — 개인정보는 받지 않습니다. 학년·반과 로그인 정보뿐이에요. */
 function signupScreenHtml() {
   const v = S.signupForm || {};
-  const f = (id, label, extra, hint) =>
-    '<label class="bs-lab" style="margin-top:14px;">' + label +
-      (hint ? ' <span style="color:var(--mute);">' + hint + '</span>' : '') + '</label>' +
-    '<input class="bs-in" id="' + id + '" ' + (extra || '') + ' value="' + escapeHtml(v[id] || "") + '">';
+  const grades = [1, 2, 3, 4, 5, 6].map((n) =>
+    '<option value="' + n + '"' + (String(v["sg-grade"]) === String(n) ? ' selected' : '') + '>' + n + '학년</option>').join("");
   return authShell("선생님 가입 신청",
-    "신청하면 관리자가 확인한 뒤 승인해 드려요. 승인이 되면 같은 아이디로 로그인해서 학급을 운영할 수 있어요.",
-    f("sg-name", "성함", 'autocomplete="name" placeholder="김선생"') +
-    f("sg-school", "학교", 'autocomplete="off" placeholder="○○초등학교"', "(선택)") +
-    f("sg-contact", "연락처", 'autocomplete="off" placeholder="이메일 또는 전화번호"', "(선택)") +
-    f("sg-class", "처음 만들 학급 이름", 'autocomplete="off" placeholder="3학년 2반"') +
-    '<div style="height:18px;"></div>' +
-    f("sg-id", "아이디", 'autocomplete="off" placeholder="영문·숫자, 띄어쓰기 없이"') +
+    "학년과 반만 적으면 돼요. 신청하면 관리자가 확인한 뒤 승인해 드려요.",
+    '<label class="bs-lab" style="margin-top:18px;">우리 반</label>' +
+    '<div class="flex gap-2 items-center">' +
+      '<select class="bs-in" id="sg-grade" style="flex:1;min-width:0;">' +
+        '<option value="">학년 고르기</option>' + grades +
+      '</select>' +
+      '<input class="bs-in" id="sg-class" style="flex:1;min-width:0;" inputmode="numeric" ' +
+        'autocomplete="off" placeholder="반" value="' + escapeHtml(v["sg-class"] || "") + '">' +
+    '</div>' +
+    '<div style="font-size:12.5px;color:var(--mute);margin-top:7px;line-height:1.6;">' +
+      '학급 이름은 나중에 설정에서 바꿀 수 있어요.</div>' +
+    '<div style="height:20px;"></div>' +
+    '<label class="bs-lab">아이디</label>' +
+    '<input class="bs-in" id="sg-id" autocomplete="off" placeholder="영문·숫자, 띄어쓰기 없이" value="' +
+      escapeHtml(v["sg-id"] || "") + '">' +
     '<label class="bs-lab" style="margin-top:14px;">비밀번호</label>' +
     '<input class="bs-in" id="sg-pw" type="password" placeholder="4자 이상" autocomplete="new-password">' +
     '<label class="bs-lab" style="margin-top:14px;">비밀번호 확인</label>' +
     '<input class="bs-in" id="sg-pw2" type="password" autocomplete="new-password">' +
+    '<div class="bs-card bs-card-pad" style="background:var(--soft);border:0;margin-top:18px;padding:13px 15px;">' +
+      '<div style="font-size:12.5px;color:var(--dim);line-height:1.7;">' +
+        '🔒 성함·학교·연락처는 받지 않아요. 저장되는 건 학년·반과 아이디뿐이에요.</div></div>' +
     '<div id="sg-err" style="font-size:13px;color:var(--red);margin-top:12px;min-height:18px;">' + escapeHtml(S.authMsg) + '</div>' +
     '<button type="button" class="bs-btn" id="sg-go" style="width:100%;margin-top:6px;">가입 신청 보내기</button>' +
     '<div class="text-center" style="margin-top:16px;">' +
@@ -1173,14 +1185,16 @@ function signupSentHtml() {
 async function submitSignup() {
   const g = (id) => String(($("#" + id) || {}).value || "").trim();
   const err = (m) => { const el = $("#sg-err"); if (el) el.textContent = m; };
-  const name = g("sg-name"), school = g("sg-school"), contact = g("sg-contact");
-  const className = g("sg-class") || "우리 반";
+  const grade = g("sg-grade");
+  const cls = g("sg-class");
   const loginId = g("sg-id");
   const pw = String(($("#sg-pw") || {}).value || "");
   const pw2 = String(($("#sg-pw2") || {}).value || "");
-  S.signupForm = { "sg-name": name, "sg-school": school, "sg-contact": contact, "sg-class": className, "sg-id": loginId };
+  S.signupForm = { "sg-grade": grade, "sg-class": cls, "sg-id": loginId };
 
-  if (!name) { err("성함을 적어 주세요."); return; }
+  if (!grade) { err("학년을 골라 주세요."); return; }
+  if (!cls) { err("반을 적어 주세요."); return; }
+  const className = grade + "학년 " + cls.replace(/반\s*$/, "") + "반";
   if (!loginId) { err("아이디를 적어 주세요."); return; }
   if (/\s/.test(loginId)) { err("아이디에는 띄어쓰기를 쓸 수 없어요."); return; }
   if (pw.length < 4) { err("비밀번호는 4자 이상으로 해 주세요."); return; }
@@ -1195,7 +1209,7 @@ async function submitSignup() {
       if (fresh.teachers.some((t) => t.loginId.toLowerCase() === low)) throw new Error("이미 쓰고 있는 아이디예요.");
       if (Object.prototype.hasOwnProperty.call(fresh.index, low)) throw new Error("이미 쓰고 있는 아이디예요.");
       const t = {
-        id: uid(), loginId, loginPw: hashPw(pw), name, school, contact,
+        id: uid(), loginId, loginPw: hashPw(pw),
         status: "pending", memo: "", createdAt: now(), decidedAt: 0,
         classes: [{ id: uid(), name: className, row: newClassRow(), createdAt: now(), students: 0 }],
       };
@@ -1252,7 +1266,7 @@ async function tryLogin(id, pw) {
     if (t.status === "suspended") { S.loginError = "지금은 쓸 수 없는 계정이에요. 관리자에게 문의해 주세요."; render(); return; }
     S.session = { role: "teacher", tid: t.id, row: null };
     S.loginError = ""; S.page = "home"; S.sel = []; storeSession(S.session);
-    say((t.name || t.loginId) + " 선생님, 반가워요.");
+    say(teacherLabel(t) + " 선생님, 반가워요.");
     if (t.classes.length === 1) { await openClass(t.classes[0].row); }
     else render();
     return;
@@ -1332,7 +1346,7 @@ function classPickerHtml(t) {
     '<div class="bs-top"><div class="mx-auto px-5 py-3 flex items-center justify-between gap-4" style="max-width:900px;">' +
       '<div class="bs-mark">Choi<span>\'s</span></div>' +
       '<div class="flex items-center gap-2 bs-top-acts">' +
-        '<span class="bs-pill" style="cursor:default;">' + escapeHtml(t.name || t.loginId) + ' 선생님</span>' +
+        '<span class="bs-pill" style="cursor:default;">' + escapeHtml(t.loginId) + ' 선생님</span>' +
         '<button type="button" class="bs-pill" id="teacher-logout">로그아웃</button>' +
       '</div></div></div>' +
     '<div class="mx-auto px-5 py-7" style="max-width:900px;">' +
@@ -3330,11 +3344,16 @@ const ADMIN_NAV = [
   { k: "asettings", ico: "⚙", label: "관리자 설정" },
 ];
 
+/* 선생님을 무엇으로 부를지 — 성함을 안 받으니 «맡은 학급» 으로 부릅니다 */
+function teacherLabel(t) {
+  if (!t) return "—";
+  const names = (t.classes || []).map((c) => c.name).filter(Boolean);
+  return names.length ? names[0] : t.loginId;
+}
 function teacherLine(t) {
-  const bits = [];
-  if (t.school) bits.push(escapeHtml(t.school));
-  if (t.contact) bits.push(escapeHtml(t.contact));
-  return bits.join(" · ");
+  const names = (t.classes || []).map((c) => c.name).filter(Boolean);
+  if (names.length > 1) return escapeHtml(names.slice(1).join(" · "));
+  return "";
 }
 
 function adminPendingPage() {
@@ -3344,14 +3363,13 @@ function adminPendingPage() {
   html += '<div class="grid gap-4" style="grid-template-columns:repeat(auto-fill, minmax(300px, 1fr));">';
   list.forEach((t) => {
     html += '<div class="bs-card bs-card-pad">' +
-      '<div class="flex items-center gap-2" style="margin-bottom:12px;">' + Avatar(t.name || t.loginId, 36) +
+      '<div class="flex items-center gap-2" style="margin-bottom:12px;">' + Avatar(teacherLabel(t), 36) +
         '<div style="min-width:0;">' +
-          '<div style="font-weight:700;font-size:15px;">' + escapeHtml(t.name || t.loginId) + '</div>' +
-          '<div style="font-size:12.5px;color:var(--dim);">' + (teacherLine(t) || "학교 · 연락처 없음") + '</div>' +
+          '<div style="font-weight:700;font-size:15px;">' + escapeHtml(teacherLabel(t)) + '</div>' +
+          '<div style="font-size:12.5px;color:var(--dim);">가입을 기다리고 있어요</div>' +
         '</div></div>' +
       '<div style="font-size:13.5px;color:var(--dim);line-height:1.9;border-top:1px solid var(--line);padding-top:11px;">' +
         '아이디 <b class="bs-num" style="color:var(--ink);">' + escapeHtml(t.loginId) + '</b><br>' +
-        '만들 학급 <b style="color:var(--ink);">' + escapeHtml((t.classes[0] && t.classes[0].name) || "—") + '</b><br>' +
         '신청 ' + (t.createdAt ? when(t.createdAt) : "—") +
       '</div>' +
       '<div class="flex gap-2 mt-4">' +
@@ -3363,17 +3381,17 @@ function adminPendingPage() {
 }
 
 function adminTeachersPage() {
-  const list = S.dir.teachers.slice().sort((a, b) => (a.name || a.loginId).localeCompare(b.name || b.loginId, "ko"));
+  const list = S.dir.teachers.slice().sort((a, b) => teacherLabel(a).localeCompare(teacherLabel(b), "ko"));
   let html = PageHead("선생님", "가입한 선생님과 상태를 관리해요.", "");
   if (!list.length) return html + Empty("아직 가입한 선생님이 없어요.");
   html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
-    '<thead><tr><th style="width:180px;">선생님</th><th style="width:130px;">아이디</th>' +
-    '<th style="width:180px;">학교 · 연락처</th><th style="width:90px;">학급</th>' +
+    '<thead><tr><th style="width:180px;">맡은 학급</th><th style="width:130px;">아이디</th>' +
+    '<th style="width:180px;">다른 학급</th><th style="width:90px;">학급 수</th>' +
     '<th style="width:100px;">상태</th><th style="width:90px;"></th></tr></thead><tbody>';
   list.forEach((t) => {
     html += '<tr>' +
-      '<td><span class="flex items-center gap-2">' + Avatar(t.name || t.loginId, 28) +
-        '<span style="font-weight:600;">' + escapeHtml(t.name || t.loginId) + '</span></span></td>' +
+      '<td><span class="flex items-center gap-2">' + Avatar(teacherLabel(t), 28) +
+        '<span style="font-weight:600;">' + escapeHtml(teacherLabel(t)) + '</span></span></td>' +
       '<td><span class="bs-num">' + escapeHtml(t.loginId) + '</span></td>' +
       '<td style="color:var(--dim);font-size:13.5px;">' + (teacherLine(t) || "—") + '</td>' +
       '<td class="bs-num">' + t.classes.length + '개</td>' +
@@ -3389,12 +3407,12 @@ function adminClassesPage() {
   let html = PageHead("학급", "모든 선생님의 학급이에요. «열기»를 누르면 그 학급 화면을 그대로 볼 수 있어요.", "");
   if (!list.length) return html + Empty("아직 만들어진 학급이 없어요.");
   html += '<div class="bs-card" style="overflow:hidden;"><div class="bs-scroll"><table class="bs-tbl">' +
-    '<thead><tr><th style="width:200px;">학급</th><th style="width:150px;">담임</th>' +
+    '<thead><tr><th style="width:200px;">학급</th><th style="width:150px;">담임 아이디</th>' +
     '<th style="width:90px;">학생</th><th style="width:120px;">만든 날</th><th style="width:150px;"></th></tr></thead><tbody>';
   list.sort((a, b) => a.cls.name.localeCompare(b.cls.name, "ko")).forEach((x) => {
     html += '<tr>' +
       '<td style="font-weight:600;">' + escapeHtml(x.cls.name) + '</td>' +
-      '<td style="color:var(--dim);">' + escapeHtml(x.teacher.name || x.teacher.loginId) + '</td>' +
+      '<td style="color:var(--dim);">' + escapeHtml(x.teacher.loginId) + '</td>' +
       '<td class="bs-num">' + fmt(x.cls.students) + '명</td>' +
       '<td style="color:var(--dim);font-size:13.5px;">' + (x.cls.createdAt ? new Date(x.cls.createdAt).toLocaleDateString("ko-KR") : "—") + '</td>' +
       '<td class="bs-r"><span class="flex gap-2 justify-end">' +
@@ -3491,16 +3509,14 @@ async function setTeacherStatus(tid, status) {
 }
 
 function openTeacherAdminModal(t) {
-  let name = t.name, school = t.school, contact = t.contact, memo = t.memo;
+  let memo = t.memo;
   const body =
-    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + Avatar(t.name || t.loginId, 34) +
-      '<div><div style="font-weight:700;">' + escapeHtml(t.name || t.loginId) + '</div>' +
+    '<div class="flex items-center gap-2" style="margin-bottom:16px;">' + Avatar(teacherLabel(t), 34) +
+      '<div><div style="font-weight:700;">' + escapeHtml(teacherLabel(t)) + '</div>' +
       '<div style="font-size:12.5px;color:var(--dim);">아이디 ' + escapeHtml(t.loginId) +
         ' · <span class="bs-badge ' + STATUS_CLASS[t.status] + '">' + STATUS_LABEL[t.status] + '</span></div></div></div>' +
-    '<label class="bs-lab">성함</label><input class="bs-in" id="tm-name" value="' + escapeHtml(name) + '">' +
-    '<label class="bs-lab" style="margin-top:14px;">학교</label><input class="bs-in" id="tm-school" value="' + escapeHtml(school) + '">' +
-    '<label class="bs-lab" style="margin-top:14px;">연락처</label><input class="bs-in" id="tm-contact" value="' + escapeHtml(contact) + '">' +
-    '<label class="bs-lab" style="margin-top:14px;">관리자 메모</label><input class="bs-in" id="tm-memo" value="' + escapeHtml(memo) + '">' +
+    '<label class="bs-lab">관리자 메모 <span style="color:var(--mute);">(관리자만 봐요)</span></label>' +
+    '<input class="bs-in" id="tm-memo" placeholder="예: 옆 반 선생님" value="' + escapeHtml(memo) + '">' +
     '<label class="bs-lab" style="margin-top:18px;">상태</label>' +
     '<div class="flex gap-2 flex-wrap">' +
       T_STATUS.map((s) => '<button type="button" class="bs-chip" data-tm-st="' + s + '" data-on="' + (t.status === s) + '">' +
@@ -3519,9 +3535,6 @@ function openTeacherAdminModal(t) {
       '<button type="button" class="bs-btn" id="tm-save">저장</button></div>';
   const root = showModal("선생님 관리", body, {});
   root.addEventListener("input", (e) => {
-    if (e.target.id === "tm-name") name = e.target.value;
-    if (e.target.id === "tm-school") school = e.target.value;
-    if (e.target.id === "tm-contact") contact = e.target.value;
     if (e.target.id === "tm-memo") memo = e.target.value;
   });
   root.addEventListener("click", async (e) => {
@@ -3535,7 +3548,7 @@ function openTeacherAdminModal(t) {
       try {
         await dirCommit((fresh) => Object.assign({}, fresh, {
           teachers: fresh.teachers.map((x) => (x.id === t.id
-            ? Object.assign({}, x, { name: name.trim(), school: school.trim(), contact: contact.trim(), memo: memo.trim() }) : x)),
+            ? Object.assign({}, x, { memo: memo.trim() }) : x)),
         }));
       } catch (err) { $("#tm-err", root).textContent = "저장하지 못했어요."; return; }
       closeModal(); render(); say("저장했어요.");
@@ -3547,7 +3560,7 @@ function openTeacherPwResetModal(t) {
   let pw = "";
   const body =
     '<p style="font-size:13.5px;color:var(--dim);line-height:1.7;">' +
-      escapeHtml(t.name || t.loginId) + ' 선생님의 비밀번호를 새로 정해요. 정한 뒤에는 직접 알려 주셔야 해요.</p>' +
+      escapeHtml(teacherLabel(t)) + ' 선생님의 비밀번호를 새로 정해요. 정한 뒤에는 직접 알려 주셔야 해요.</p>' +
     '<label class="bs-lab" style="margin-top:16px;">새 비밀번호</label>' +
     '<div class="flex gap-2"><input class="bs-in bs-num" id="tp-pw" autocomplete="off" value="">' +
       '<button type="button" class="bs-chip" id="tp-rand" style="flex-shrink:0;">자동</button></div>' +
@@ -3571,7 +3584,7 @@ function openTeacherPwResetModal(t) {
       const shown = pw;
       closeModal(); render();
       showModal("새 비밀번호",
-        '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(t.name || t.loginId) + ' 선생님께 이 비밀번호를 알려 주세요.</p>' +
+        '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(teacherLabel(t)) + ' 선생님께 이 비밀번호를 알려 주세요.</p>' +
         '<div class="bs-card bs-card-pad bs-num" style="background:var(--soft);border:0;margin-top:14px;text-align:center;' +
           'font-size:26px;font-weight:800;letter-spacing:.06em;">' + escapeHtml(shown) + '</div>', {});
     }
@@ -3581,7 +3594,7 @@ function openTeacherPwResetModal(t) {
 function openTeacherDeleteModal(t) {
   let typed = "";
   const body =
-    '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(t.name || t.loginId) + ' 선생님 계정과 학급 ' +
+    '<p style="font-size:14px;line-height:1.8;">' + escapeHtml(teacherLabel(t)) + ' 선생님 계정과 학급 ' +
       t.classes.length + '개(' + escapeHtml(t.classes.map((c) => c.name).join(", ") || "없음") + ')를 모두 지워요. 되돌릴 수 없어요.</p>' +
     '<label class="bs-lab" style="margin-top:16px;">확인을 위해 <b style="color:var(--ink);">삭제</b> 라고 적어 주세요</label>' +
     '<input class="bs-in" id="td-word" autocomplete="off">' +
@@ -4230,7 +4243,7 @@ async function bootDirectory() {
     if (ld.auth && ld.auth.teacherId) {
       dir.teachers.push({
         id: uid(), loginId: ld.auth.teacherId, loginPw: hashPw(ld.auth.teacherPw),
-        name: ld.auth.teacherId, school: "", contact: "",
+        
         status: "approved", memo: "이 도구를 처음 쓰시던 계정이에요.",
         createdAt: now(), decidedAt: now(),
         classes: [{ id: uid(), name: ld.className, row: ROW, createdAt: now(), students: ld.students.length }],
